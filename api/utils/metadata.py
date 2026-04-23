@@ -1,3 +1,4 @@
+import ipaddress
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
@@ -13,14 +14,44 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _assert_safe_url(url: str) -> None:
+    """
+    Validates that the URL uses a supported scheme and is not an internal/private address.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+    host = parsed.hostname
+    if not host:
+        raise ValueError("URL has no hostname")
+    try:
+        addr = ipaddress.ip_address(host)
+        if any(addr in net for net in _PRIVATE_NETWORKS):
+            raise ValueError(f"Requests to private/internal addresses are not allowed")
+    except ValueError as e:
+        if "private" in str(e) or "internal" in str(e):
+            raise
+
 
 async def canonicalize_url(url: str) -> str:
-    """Follow redirects, strip tracking params, normalize trailing slash."""
+    """Follows redirects, strips tracking params, and normalizes trailing slash for a URL."""
+    _assert_safe_url(url)
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
             resp = await client.head(url, headers=HEADERS)
             final_url = str(resp.url)
-    except Exception:
+    except (httpx.TimeoutException, httpx.RequestError):
         final_url = url
 
     parsed = urlparse(final_url)
@@ -47,6 +78,12 @@ async def fetch_metadata(url: str) -> dict:
         "favicon_url": None,
         "fetch_status": "ok",
     }
+
+    try:
+        _assert_safe_url(url)
+    except ValueError:
+        result["fetch_status"] = "unreachable"
+        return result
 
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
@@ -80,8 +117,11 @@ async def fetch_metadata(url: str) -> dict:
     icon = soup.find("link", rel=lambda r: r and "icon" in r)
     if icon and icon.get("href"):
         href = icon["href"]
-        result["favicon_url"] = href if href.startswith("http") else base + href
-    else:
+        if not href.startswith("http"):
+            href = base + href
+        if urlparse(href).scheme in ("http", "https"):
+            result["favicon_url"] = href
+    if not result["favicon_url"]:
         result["favicon_url"] = f"{base}/favicon.ico"
 
     return result

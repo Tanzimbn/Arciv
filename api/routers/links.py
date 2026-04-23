@@ -23,6 +23,12 @@ async def create_link(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Creates a new Link for the current user after validating URL and metadata.
+    - Executes in `api/routers/links.py` as a POST route.
+    - Canonicalizes URL, checks for existing user-specific link, fetches metadata.
+    - Enqueues AI classification job when available; returns created Link
+    """
     canonical = await canonicalize_url(body.url)
 
     result = await db.execute(
@@ -79,6 +85,11 @@ async def list_links(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Lists links for the current user, optionally filtered by queue.
+    - Executes in api/routers/links.py as a GET route.
+    - Filters by queue if provided; defaults to active links.
+    """
     q = select(Link).where(Link.user_id == current_user.id)
 
     if queue == "archive":
