@@ -33,7 +33,7 @@ function FaviconImg({ src, domain }) {
   );
 }
 
-export default function LinkCard({ link, onDone, onDelete }) {
+export default function LinkCard({ link, onDone, onDelete, onRetryAI }) {
   const domain = new URL(link.canonical_url).hostname.replace(/^www\./, "");
   const savedDate = new Date(link.saved_at).toLocaleDateString(undefined, {
     month: "short",
@@ -118,6 +118,15 @@ export default function LinkCard({ link, onDone, onDelete }) {
             link.description
           )}
         </p>
+
+        {link.ai_status === "failed" && (
+          <button
+            onClick={() => onRetryAI(link.id)}
+            className="mt-1.5 text-xs text-indigo-600 hover:underline"
+          >
+            Retry AI
+          </button>
+        )}
 
         {link.ai_tags && link.ai_tags.length > 0 && (
           <div className="flex gap-1 mt-1.5 flex-wrap">

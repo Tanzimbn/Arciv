@@ -41,4 +41,21 @@ export const api = {
   updateLink: (id, patch) => request("PATCH", `/links/${id}`, patch),
 
   deleteLink: (id) => request("DELETE", `/links/${id}`),
+
+  retryAI: (id) => request("POST", `/links/${id}/retry-ai`),
+
+  getSettings: () => request("GET", "/settings"),
+  updateSettings: (patch) => request("PATCH", "/settings", patch),
+  testAI: () => request("POST", "/settings/ai/test"),
+
+  discoverFeed: (url) => request("POST", "/feeds/discover", { url }),
+  subscribeFeed: (body) => request("POST", "/feeds", body),
+  getFeeds: () => request("GET", "/feeds"),
+  updateFeed: (id, patch) => request("PATCH", `/feeds/${id}`, patch),
+  deleteFeed: (id) => request("DELETE", `/feeds/${id}`),
+  checkFeedNow: (id) => request("POST", `/feeds/${id}/check-now`),
+
+  getNotifications: () => request("GET", "/notifications"),
+  getUnreadCount: () => request("GET", "/notifications/unread-count"),
+  readAllNotifications: () => request("POST", "/notifications/read-all"),
 };

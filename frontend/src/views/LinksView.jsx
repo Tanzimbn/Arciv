@@ -4,7 +4,7 @@ import LinkCard from "../components/LinkCard.jsx";
 import QueueTabs from "../components/QueueTabs.jsx";
 import UrlInputBar from "../components/UrlInputBar.jsx";
 
-export default function LinksView({ onLogout }) {
+export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [links, setLinks] = useState([]);
   const [activeQueue, setActiveQueue] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -58,6 +58,15 @@ export default function LinksView({ onLogout }) {
     }
   }
 
+  async function handleRetryAI(id) {
+    try {
+      const updated = await api.retryAI(id);
+      setLinks((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    } catch {
+      // silently ignore
+    }
+  }
+
   async function handleDeleteConfirmed(id) {
     setDeleteConfirm(null);
     try {
@@ -79,6 +88,18 @@ export default function LinksView({ onLogout }) {
           <div className="flex-1">
             <UrlInputBar onSave={handleSave} loading={saving} />
           </div>
+          <button
+            onClick={onFeeds}
+            className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+          >
+            Feeds
+          </button>
+          <button
+            onClick={onSettings}
+            className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+          >
+            Settings
+          </button>
           <button
             onClick={onLogout}
             className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
@@ -117,6 +138,7 @@ export default function LinksView({ onLogout }) {
                 link={link}
                 onDone={handleDone}
                 onDelete={(id) => setDeleteConfirm(id)}
+                onRetryAI={handleRetryAI}
               />
             ))}
           </div>

@@ -10,6 +10,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal
 from api.routers import auth, links
 from api.routers import settings as settings_router
+from api.routers import feeds, notifications
 
 
 @asynccontextmanager
@@ -32,6 +33,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
+app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 
 
 @app.get("/health")
@@ -48,6 +51,9 @@ async def health():
     try:
         r = aioredis.from_url(settings.REDIS_URL)
         await r.ping()
+        last_poll = await r.get("arciv:last_feed_poll")
+        if last_poll:
+            status_map["last_feed_poll"] = last_poll.decode()
         await r.aclose()
         status_map["redis"] = "ok"
     except Exception as e:
