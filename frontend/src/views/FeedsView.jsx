@@ -8,6 +8,20 @@ const STATUS_COLORS = {
   dead: "bg-red-100 text-red-600",
 };
 
+const STATUS_LABELS = {
+  active: "✅ Active",
+  paused: "⏸️ Paused",
+  degraded: "⚠️ Degraded",
+  dead: "❌ Dead",
+};
+
+const STATUS_DESCRIPTIONS = {
+  active: "Feed is working normally",
+  paused: "Feed updates are paused",
+  degraded: "Feed has been unreachable recently",
+  dead: "Feed has been unreachable for a long time",
+};
+
 export default function FeedsView({ onBack }) {
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,11 +116,11 @@ export default function FeedsView({ onBack }) {
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={onBack}
-            className="text-sm text-gray-400 hover:text-gray-600"
+            className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
             ← Back
           </button>
-          <span className="font-bold text-gray-900">Feed Tracker</span>
+          <span className="font-bold text-gray-900 text-lg sm:text-xl">Feed Tracker</span>
         </div>
       </header>
 
@@ -116,7 +130,7 @@ export default function FeedsView({ onBack }) {
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Add source
           </h2>
-          <form onSubmit={handleDiscover} className="flex gap-2">
+          <form onSubmit={handleDiscover} className="flex flex-col sm:flex-row gap-2">
             <input
               type="url"
               required
@@ -175,7 +189,7 @@ export default function FeedsView({ onBack }) {
                 key={feed.id}
                 className="bg-white border border-gray-200 rounded-xl p-4"
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       {feed.favicon_url && (
@@ -194,35 +208,42 @@ export default function FeedsView({ onBack }) {
                           STATUS_COLORS[feed.status] ?? "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {feed.status}
+                        {STATUS_LABELS[feed.status] ?? feed.status}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-1 truncate">{feed.feed_url}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {feed.total_items_received} posts received
-                      {feed.last_checked_at && (
-                        <> · checked {new Date(feed.last_checked_at).toLocaleDateString()}</>
+                    <div className="text-xs text-gray-400 mt-0.5 space-y-1">
+                      <p>
+                        {feed.total_items_received} posts received
+                        {feed.last_checked_at && (
+                          <> · checked {new Date(feed.last_checked_at).toLocaleDateString()}</>
+                        )}
+                      </p>
+                      {(feed.status === "degraded" || feed.status === "dead") && (
+                        <p className="text-amber-600 font-medium">
+                          {STATUS_DESCRIPTIONS[feed.status]}
+                        </p>
                       )}
-                    </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => handleCheckNow(feed)}
                       title="Check now"
-                      className="text-xs px-2 py-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      className="text-xs px-3 py-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                     >
                       Refresh
                     </button>
                     <button
                       onClick={() => handleTogglePause(feed)}
-                      className="text-xs px-2 py-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                      className="text-xs px-3 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                     >
                       {feed.status === "paused" ? "Resume" : "Pause"}
                     </button>
                     <button
                       onClick={() => setDeleteConfirm(feed.id)}
-                      className="text-xs px-2 py-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      className="text-xs px-3 py-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
                     >
                       Remove
                     </button>

@@ -10,7 +10,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal
 from api.routers import auth, links
 from api.routers import settings as settings_router
-from api.routers import feeds, notifications
+from api.routers import feeds, notifications, telegram
 
 
 @asynccontextmanager
@@ -35,6 +35,7 @@ app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 
 
 @app.get("/health")

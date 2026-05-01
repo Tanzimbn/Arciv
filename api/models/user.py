@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, String, func
+from sqlalchemy import BigInteger, Boolean, String, func, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    telegram_link_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_link_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     ai_provider: Mapped[str] = mapped_column(String(50), default="gemini")
     ai_api_key_enc: Mapped[str | None] = mapped_column(nullable=True)
     feed_notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True)

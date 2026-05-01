@@ -9,6 +9,7 @@ from api.database import get_db
 from api.middleware.auth import get_current_user
 from api.models.feed import Feed, FeedItem
 from api.models.link import Link
+from api.models.notification import Notification
 from api.models.user import User
 from api.schemas.feed import (
     FeedCreate,
@@ -220,5 +221,15 @@ async def _import_feed_items(
 
     feed.total_items_received += len(new_link_ids)
     feed.last_checked_at = datetime.now(timezone.utc)
+
+    # Create notification for new feed items
+    if new_link_ids:
+        notification = Notification(
+            user_id=user_id,
+            type="new_feed_items",
+            title=f"{feed.title or 'Feed'} published {len(new_link_ids)} new post{'s' if len(new_link_ids) > 1 else ''}",
+            body=f"Added {len(new_link_ids)} new item{'s' if len(new_link_ids) > 1 else ''} from {feed.title or 'your feed'}"
+        )
+        db.add(notification)
 
     return new_link_ids

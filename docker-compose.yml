@@ -55,6 +55,17 @@ services:
         condition: service_healthy
     command: python -m arq worker.worker.WorkerSettings
 
+  bot:
+    build: .
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      api:
+        condition: service_started
+    command: python bot/main.py
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

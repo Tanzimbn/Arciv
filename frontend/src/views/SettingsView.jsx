@@ -14,6 +14,8 @@ export default function SettingsView({ onBack }) {
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [telegramToken, setTelegramToken] = useState("");
+  const [generatingToken, setGeneratingToken] = useState(false);
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -69,17 +71,31 @@ export default function SettingsView({ onBack }) {
     }
   }
 
+  async function handleGenerateTelegramToken() {
+    setGeneratingToken(true);
+    setError("");
+    try {
+      const response = await api.generateTelegramToken();
+      setTelegramToken(response.token);
+      setSuccess("Token generated! Copy this token and send it to the Arciv bot.");
+    } catch {
+      setError("Failed to generate token.");
+    } finally {
+      setGeneratingToken(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={onBack}
-            className="text-sm text-gray-400 hover:text-gray-600"
+            className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
             ← Back
           </button>
-          <span className="font-bold text-gray-900">Settings</span>
+          <span className="font-bold text-gray-900 text-lg sm:text-xl">Settings</span>
         </div>
       </header>
 
@@ -88,7 +104,7 @@ export default function SettingsView({ onBack }) {
           <div className="text-sm text-gray-400 py-8 text-center">Loading…</div>
         ) : (
           <form onSubmit={handleSave} className="space-y-6">
-            <section className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+            <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 AI Classification
               </h2>
@@ -166,7 +182,7 @@ export default function SettingsView({ onBack }) {
               </div>
             </section>
 
-            <section className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+            <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Notifications
               </h2>
@@ -188,6 +204,57 @@ export default function SettingsView({ onBack }) {
                   className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                 />
               </label>
+            </section>
+
+            <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Telegram Bot
+              </h2>
+              <div className="text-sm text-gray-600">
+                <p className="mb-2">
+                  Link your Telegram account to receive daily digests and save links by forwarding them to the bot.
+                </p>
+                <p className="text-xs text-gray-500">
+                  1. Generate a token below<br/>
+                  2. Send <code className="bg-gray-100 px-1 rounded">/start &lt;token&gt;</code> to @arciv_bot<br/>
+                  3. Your account will be linked automatically
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleGenerateTelegramToken}
+                  disabled={generatingToken}
+                  className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {generatingToken ? "Generating..." : "Generate linking token"}
+                </button>
+                
+                {telegramToken && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Your token (copy this):</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-xs font-mono break-all">
+                        {telegramToken}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(telegramToken);
+                          setSuccess("Token copied to clipboard!");
+                        }}
+                        className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Send this to @arciv_bot: <code className="bg-gray-100 px-1 rounded">/start {telegramToken}</code>
+                    </p>
+                  </div>
+                )}
+              </div>
             </section>
 
             {error && <p className="text-sm text-red-600">{error}</p>}

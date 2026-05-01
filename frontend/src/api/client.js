@@ -58,4 +58,6 @@ export const api = {
   getNotifications: () => request("GET", "/notifications"),
   getUnreadCount: () => request("GET", "/notifications/unread-count"),
   readAllNotifications: () => request("POST", "/notifications/read-all"),
+
+  generateTelegramToken: () => request("POST", "/telegram/link-token"),
 };
