@@ -63,7 +63,7 @@ services:
     depends_on:
       api:
         condition: service_started
-    command: python bot/main.py
+    command: python -c "import sys; sys.path.insert(0, '/app'); exec(open('bot/main.py').read())"
     restart: unless-stopped
 
 volumes:

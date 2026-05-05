@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
+import os
 
 import redis.asyncio as aioredis
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from api.config import settings
@@ -62,3 +65,27 @@ async def health():
 
     overall = "ok" if status_map["db"] == "ok" and status_map["redis"] == "ok" else "degraded"
     return {"status": overall, **status_map}
+
+
+# Serve static files from frontend/dist
+if os.path.exists("/app/frontend/dist"):
+    app.mount("/static", StaticFiles(directory="/app/frontend/dist"), name="static")
+
+
+@app.get("/")
+async def read_index():
+    """Serve the React app index.html"""
+    if os.path.exists("/app/frontend/dist/index.html"):
+        return FileResponse("/app/frontend/dist/index.html")
+    else:
+        # Fallback simple HTML if React app isn't built
+        return FileResponse("/app/simple_ui.html")
+
+
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Catch-all route to serve React app for client-side routing"""
+    if os.path.exists("/app/frontend/dist/index.html"):
+        return FileResponse("/app/frontend/dist/index.html")
+    else:
+        return FileResponse("/app/simple_ui.html")
