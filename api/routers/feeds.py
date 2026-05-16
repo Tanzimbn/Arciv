@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.database import get_db
 from api.middleware.auth import get_current_user
 from api.models.feed import Feed, FeedItem
-from api.models.link import Link
-from api.models.notification import Notification
 from api.models.user import User
 from api.schemas.feed import (
     FeedCreate,
@@ -19,16 +18,15 @@ from api.schemas.feed import (
     FeedUpdate,
 )
 from api.utils.feed_discovery import discover_feed, entry_guid, parse_feed_content
-from api.utils.heuristics import classify_by_url
-from api.utils.metadata import canonicalize_url
-
-import httpx
 
 router = APIRouter()
 
 
 @router.post("/discover", response_model=FeedDiscoverResponse)
 async def discover(body: FeedDiscoverRequest):
+    """
+    Discover a feed feed from a URL.
+    """
     info = await discover_feed(body.url)
     if not info:
         raise HTTPException(
@@ -46,10 +44,13 @@ async def discover(body: FeedDiscoverRequest):
 @router.post("/", response_model=FeedResponse, status_code=status.HTTP_201_CREATED)
 async def subscribe(
     body: FeedCreate,
-    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Subscribe to a feed.
+    """
+
     result = await db.execute(
         select(Feed).where(Feed.user_id == current_user.id, Feed.feed_url == body.feed_url)
     )
@@ -66,20 +67,13 @@ async def subscribe(
     db.add(feed)
     await db.flush()  # get feed.id before commit
 
-    # Import 10 most recent items
-    new_link_ids = await _import_feed_items(
-        db=db,
-        feed=feed,
-        user_id=current_user.id,
-        limit=10,
-    )
+    # Record existing items so the next poll doesn't treat them as new.
+    # We intentionally do NOT create Link rows or notify — subscribing is
+    # "start watching" only. Future posts published after this moment will
+    # generate a notification; the user can manually save any they want.
+    await _seed_feed_history(db, feed)
     await db.commit()
     await db.refresh(feed)
-
-    arq_pool = getattr(request.app.state, "arq_pool", None)
-    if arq_pool is not None:
-        for link_id in new_link_ids:
-            await arq_pool.enqueue_job("classify_link", str(link_id))
 
     return feed
 
@@ -104,6 +98,12 @@ async def update_feed(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Update a feed. 
+    You can update the status of a feed to pause it from being polled.
+    The feed will continue to be polled if you resume it.
+    You can also update the title of the feed.
+    """
     feed = await _get_feed(feed_id, current_user.id, db)
 
     if body.status is not None:
@@ -134,6 +134,10 @@ async def check_now(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Check a feed now. This will trigger a poll of the feed, and return the feed.
+    """
+    
     feed = await _get_feed(feed_id, current_user.id, db)
 
     arq_pool = getattr(request.app.state, "arq_pool", None)
@@ -153,83 +157,27 @@ async def _get_feed(feed_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) ->
     return feed
 
 
-async def _import_feed_items(
-    db: AsyncSession,
-    feed: Feed,
-    user_id: uuid.UUID,
-    limit: int = 10,
-) -> list[uuid.UUID]:
-    """Fetch feed, import up to `limit` most recent items. Returns new link IDs."""
+async def _seed_feed_history(db: AsyncSession, feed: Feed) -> None:
+    """Record every current entry's GUID in feed_items with link_id=None so the
+    next poll won't treat them as new. Captures ETag/Last-Modified to make the
+    next poll a conditional request. Best-effort: if the fetch fails, the next
+    poll will still treat the feed as fresh (no GUIDs seeded) — acceptable
+    because new items are notification-only, not auto-saved.
+    """
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
             resp = await client.get(feed.feed_url)
             resp.raise_for_status()
             parsed = parse_feed_content(resp.text)
     except Exception:
-        return []
+        return
 
-    entries = parsed.entries[:limit]
-    new_link_ids: list[uuid.UUID] = []
-
-    for entry in entries:
+    for entry in parsed.entries:
         guid = entry_guid(entry)
         if not guid:
             continue
+        db.add(FeedItem(feed_id=feed.id, guid=guid, link_id=None))
 
-        # Skip already seen
-        existing_item = await db.execute(
-            select(FeedItem).where(FeedItem.feed_id == feed.id, FeedItem.guid == guid)
-        )
-        if existing_item.scalar_one_or_none():
-            continue
-
-        entry_url = entry.get("link", "")
-        if not entry_url:
-            continue
-
-        try:
-            canonical = await canonicalize_url(entry_url)
-        except Exception:
-            canonical = entry_url
-
-        # Check if link already exists for this user (dedup)
-        existing_link = await db.execute(
-            select(Link).where(Link.user_id == user_id, Link.canonical_url == canonical)
-        )
-        link = existing_link.scalar_one_or_none()
-
-        if link is None:
-            content_type, queue = classify_by_url(canonical)
-            link = Link(
-                user_id=user_id,
-                feed_id=feed.id,
-                url=entry_url,
-                canonical_url=canonical,
-                title=entry.get("title") or entry_url,
-                description=entry.get("summary", "")[:500] if entry.get("summary") else None,
-                favicon_url=feed.favicon_url,
-                content_type=content_type,
-                queue=queue,
-                ai_status="pending",
-            )
-            db.add(link)
-            await db.flush()
-            new_link_ids.append(link.id)
-
-        feed_item = FeedItem(feed_id=feed.id, guid=guid, link_id=link.id)
-        db.add(feed_item)
-
-    feed.total_items_received += len(new_link_ids)
+    feed.last_etag = resp.headers.get("ETag")
+    feed.last_modified = resp.headers.get("Last-Modified")
     feed.last_checked_at = datetime.now(timezone.utc)
-
-    # Create notification for new feed items
-    if new_link_ids:
-        notification = Notification(
-            user_id=user_id,
-            type="new_feed_items",
-            title=f"{feed.title or 'Feed'} published {len(new_link_ids)} new post{'s' if len(new_link_ids) > 1 else ''}",
-            body=f"Added {len(new_link_ids)} new item{'s' if len(new_link_ids) > 1 else ''} from {feed.title or 'your feed'}"
-        )
-        db.add(notification)
-
-    return new_link_ids

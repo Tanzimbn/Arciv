@@ -13,9 +13,12 @@ class Settings(BaseSettings):
 
     ENCRYPTION_KEY: str
 
+    TELEGRAM_ENABLED: bool = False
     TELEGRAM_BOT_TOKEN: str = ""
     SHARED_GEMINI_KEY: str = ""
     FEED_POLL_CRON: str = "0 8 * * *"
+
+    USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
     ENVIRONMENT: str = "development"
 

@@ -6,18 +6,15 @@ from sqlalchemy import select
 
 from api.database import AsyncSessionLocal
 from api.models.feed import Feed, FeedItem
-from api.models.link import Link
 from api.models.notification import Notification
 from api.utils.feed_discovery import entry_guid, parse_feed_content
-from api.utils.heuristics import classify_by_url
-from api.utils.metadata import canonicalize_url
 
 DEGRADED_THRESHOLD = 7
 DEAD_THRESHOLD = 30
+MAX_NOTIFICATION_ITEMS = 10
 
 
 async def poll_single_feed(ctx, feed_id: str) -> None:
-    redis = ctx["redis"]
     async with AsyncSessionLocal() as db:
         feed = await db.get(Feed, uuid.UUID(feed_id))
         if not feed or feed.status == "paused":
@@ -43,27 +40,29 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
             resp.raise_for_status()
 
             parsed = parse_feed_content(resp.text)
-            new_link_ids = await _process_entries(db, feed, parsed.entries)
+            new_items = await _process_entries(db, feed, parsed.entries)
 
             feed.last_checked_at = now
             feed.last_etag = resp.headers.get("ETag")
             feed.last_modified = resp.headers.get("Last-Modified")
             feed.consecutive_failures = 0
-            feed.total_items_received += len(new_link_ids)
+            feed.total_items_received += len(new_items)
 
-            if new_link_ids:
+            if new_items:
+                source = feed.title or feed.feed_url
+                shown = new_items[:MAX_NOTIFICATION_ITEMS]
+                body_lines = [f"• {item['title']}\n  {item['url']}" for item in shown]
+                if len(new_items) > MAX_NOTIFICATION_ITEMS:
+                    body_lines.append(f"\n... and {len(new_items) - MAX_NOTIFICATION_ITEMS} more")
                 notif = Notification(
                     user_id=feed.user_id,
                     type="new_feed_items",
-                    title=f"{feed.title or feed.feed_url} has {len(new_link_ids)} new post(s)",
-                    body=None,
+                    title=f"{source} has {len(new_items)} new post{'s' if len(new_items) > 1 else ''}",
+                    body="\n\n".join(body_lines),
                 )
                 db.add(notif)
 
             await db.commit()
-
-            for link_id in new_link_ids:
-                await redis.enqueue_job("classify_link", str(link_id))
 
         except Exception as e:
             async with AsyncSessionLocal() as db2:
@@ -102,8 +101,13 @@ async def poll_all_feeds(ctx) -> None:
         await redis.enqueue_job("poll_single_feed", feed_id)
 
 
-async def _process_entries(db, feed: Feed, entries) -> list[uuid.UUID]:
-    new_link_ids: list[uuid.UUID] = []
+async def _process_entries(db, feed: Feed, entries) -> list[dict]:
+    """Record new GUIDs in feed_items (with link_id=None) and return the
+    title+url of each new entry so the caller can build a notification.
+    No Link rows are created — the user manually saves any post they want
+    via the existing POST /api/links endpoint.
+    """
+    new_items: list[dict] = []
 
     for entry in entries:
         guid = entry_guid(entry)
@@ -120,35 +124,10 @@ async def _process_entries(db, feed: Feed, entries) -> list[uuid.UUID]:
         if not entry_url:
             continue
 
-        try:
-            canonical = await canonicalize_url(entry_url)
-        except Exception:
-            canonical = entry_url
+        db.add(FeedItem(feed_id=feed.id, guid=guid, link_id=None))
+        new_items.append({
+            "title": entry.get("title") or entry_url,
+            "url": entry_url,
+        })
 
-        existing_link = await db.execute(
-            select(Link).where(Link.user_id == feed.user_id, Link.canonical_url == canonical)
-        )
-        link = existing_link.scalar_one_or_none()
-
-        if link is None:
-            content_type, queue = classify_by_url(canonical)
-            link = Link(
-                user_id=feed.user_id,
-                feed_id=feed.id,
-                url=entry_url,
-                canonical_url=canonical,
-                title=entry.get("title") or entry_url,
-                description=entry.get("summary", "")[:500] if entry.get("summary") else None,
-                favicon_url=feed.favicon_url,
-                content_type=content_type,
-                queue=queue,
-                ai_status="pending",
-            )
-            db.add(link)
-            await db.flush()
-            new_link_ids.append(link.id)
-
-        feed_item = FeedItem(feed_id=feed.id, guid=guid, link_id=link.id)
-        db.add(feed_item)
-
-    return new_link_ids
+    return new_items

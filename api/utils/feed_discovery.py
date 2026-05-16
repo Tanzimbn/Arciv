@@ -5,6 +5,8 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
+from api.config import settings
+
 COMMON_PATHS = ["/feed", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"]
 FEED_CONTENT_TYPES = {"rss", "atom", "xml"}
 
@@ -18,7 +20,11 @@ class FeedInfo:
 
 
 async def discover_feed(url: str) -> FeedInfo | None:
-    async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=10.0,
+        headers={"User-Agent": settings.USER_AGENT},
+    ) as client:
         # Try URL directly as a feed
         info = await _try_parse(client, url)
         if info:

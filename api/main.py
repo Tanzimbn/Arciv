@@ -1,19 +1,20 @@
 from contextlib import asynccontextmanager
-import os
+from pathlib import Path
 
 import redis.asyncio as aioredis
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from api.config import settings
 from api.database import AsyncSessionLocal
 from api.routers import auth, links
 from api.routers import settings as settings_router
-from api.routers import feeds, notifications, telegram
+from api.routers import feeds, notifications
+
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -38,7 +39,10 @@ app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
-app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
+
+if settings.TELEGRAM_ENABLED:
+    from api.routers import telegram
+    app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 
 
 @app.get("/health")
@@ -67,25 +71,5 @@ async def health():
     return {"status": overall, **status_map}
 
 
-# Serve static files from frontend/dist
-if os.path.exists("/app/frontend/dist"):
-    app.mount("/static", StaticFiles(directory="/app/frontend/dist"), name="static")
-
-
-@app.get("/")
-async def read_index():
-    """Serve the React app index.html"""
-    if os.path.exists("/app/frontend/dist/index.html"):
-        return FileResponse("/app/frontend/dist/index.html")
-    else:
-        # Fallback simple HTML if React app isn't built
-        return FileResponse("/app/simple_ui.html")
-
-
-@app.get("/{full_path:path}")
-async def catch_all(full_path: str):
-    """Catch-all route to serve React app for client-side routing"""
-    if os.path.exists("/app/frontend/dist/index.html"):
-        return FileResponse("/app/frontend/dist/index.html")
-    else:
-        return FileResponse("/app/simple_ui.html")
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="spa")

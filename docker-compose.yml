@@ -55,7 +55,10 @@ services:
         condition: service_healthy
     command: python -m arq worker.worker.WorkerSettings
 
+  # Telegram bot — disabled by default. Enable with TELEGRAM_ENABLED=true in .env
+  # and run: docker compose --profile telegram up
   bot:
+    profiles: ["telegram"]
     build: .
     env_file: .env
     volumes:

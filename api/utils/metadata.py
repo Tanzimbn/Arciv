@@ -4,13 +4,15 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import httpx
 from bs4 import BeautifulSoup
 
+from api.config import settings
+
 TRACKING_PARAMS = {
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
     "fbclid", "gclid", "ref",
 }
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; Arciv/1.0)",
+    "User-Agent": settings.USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
