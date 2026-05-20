@@ -9,6 +9,13 @@ from api.database import Base
 
 
 class Feed(Base):
+    """
+    RSS/Atom feed subscription owned by a user.
+    site_url: URL user originally pasted (blog homepage or direct feed)
+    feed_url: resolved RSS/Atom endpoint used for polling
+    status: active | paused | degraded (7 failures) | dead (30 failures)
+    last_etag: ETag (entity tag: server generated fingerprint of response content to track new content) from last response
+    """
     __tablename__ = "feeds"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -22,7 +29,7 @@ class Feed(Base):
     last_etag: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_modified: Mapped[str | None] = mapped_column(Text, nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
-    total_items_received: Mapped[int] = mapped_column(Integer, default=0)
+    total_items_received: Mapped[int] = mapped_column(Integer, default=0) 
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     feed_items: Mapped[list["FeedItem"]] = relationship(

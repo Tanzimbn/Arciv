@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.registry import make_provider
+from agent.registry import VALID_PROVIDERS, make_provider
 from api.config import settings
 from api.database import get_db
 from api.middleware.auth import get_current_user
@@ -40,6 +40,8 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ):
     if body.ai_provider is not None:
+        if body.ai_provider not in VALID_PROVIDERS:
+            raise HTTPException(status_code=400, detail=f"Invalid provider. Must be one of: {sorted(VALID_PROVIDERS)}")
         current_user.ai_provider = body.ai_provider
     if body.ai_api_key is not None:
         if body.ai_api_key == "":
@@ -60,6 +62,7 @@ async def update_settings(
 async def test_ai_connection(current_user: User = Depends(get_current_user)):
     provider_name = current_user.ai_provider
 
+    using_shared_fallback = False
     if current_user.ai_api_key_enc:
         try:
             api_key = decrypt_value(current_user.ai_api_key_enc, settings.ENCRYPTION_KEY)
@@ -68,6 +71,7 @@ async def test_ai_connection(current_user: User = Depends(get_current_user)):
     elif settings.SHARED_GEMINI_KEY:
         api_key = settings.SHARED_GEMINI_KEY
         provider_name = "gemini"
+        using_shared_fallback = True
     else:
         return AITestResult(success=False, message="No API key configured.", provider=provider_name)
 
@@ -79,7 +83,8 @@ async def test_ai_connection(current_user: User = Depends(get_current_user)):
             url="https://openai.com",
         )
         if result:
-            return AITestResult(success=True, message="Connection successful.", provider=provider_name)
+            msg = "Connection successful (via shared Gemini key)." if using_shared_fallback else "Connection successful."
+            return AITestResult(success=True, message=msg, provider=provider_name)
         return AITestResult(success=False, message="Provider returned no result.", provider=provider_name)
     except Exception as e:
         return AITestResult(success=False, message=str(e), provider=provider_name)
