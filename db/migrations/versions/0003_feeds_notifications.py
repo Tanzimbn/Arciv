@@ -76,8 +76,35 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
 
+    # Composite FK (feed_id, user_id) → feeds(id, user_id) cannot use ON DELETE SET NULL
+    # because links.user_id is NOT NULL. Use a trigger instead to enforce ownership at
+    # the persistence level: a link's feed_id must belong to the same user.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION check_link_feed_ownership()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.feed_id IS NOT NULL THEN
+                IF NOT EXISTS (
+                    SELECT 1 FROM feeds
+                    WHERE id = NEW.feed_id AND user_id = NEW.user_id
+                ) THEN
+                    RAISE EXCEPTION 'feed % does not belong to user %', NEW.feed_id, NEW.user_id;
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    op.execute("""
+        CREATE TRIGGER trg_link_feed_ownership
+        BEFORE INSERT OR UPDATE ON links
+        FOR EACH ROW EXECUTE FUNCTION check_link_feed_ownership();
+    """)
+
 
 def downgrade() -> None:
+    op.execute("DROP TRIGGER IF EXISTS trg_link_feed_ownership ON links;")
+    op.execute("DROP FUNCTION IF EXISTS check_link_feed_ownership();")
     op.drop_constraint("fk_links_feed_id", "links", type_="foreignkey")
     op.drop_column("links", "feed_id")
     op.drop_index("idx_notifications_user_unread", table_name="notifications")
