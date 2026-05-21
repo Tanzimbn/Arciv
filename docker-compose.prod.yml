@@ -60,6 +60,7 @@ services:
     build: .
     env_file: .env
     restart: unless-stopped
+    profiles: ["telegram"]
     depends_on:
       api:
         condition: service_healthy

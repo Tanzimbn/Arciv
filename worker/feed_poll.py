@@ -34,6 +34,9 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
 
             if resp.status_code == 304:
                 feed.last_checked_at = now
+                feed.consecutive_failures = 0
+                if feed.status == "degraded":
+                    feed.status = "active"
                 await db.commit()
                 return
 
@@ -46,6 +49,8 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
             feed.last_etag = resp.headers.get("ETag")
             feed.last_modified = resp.headers.get("Last-Modified")
             feed.consecutive_failures = 0
+            if feed.status == "degraded":
+                feed.status = "active"
             feed.total_items_received += len(new_items)
 
             if new_items:

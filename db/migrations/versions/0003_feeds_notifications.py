@@ -63,6 +63,10 @@ def upgrade() -> None:
         postgresql_where=sa.text("is_read = false"),
     )
 
+    op.add_column(
+        "links",
+        sa.Column("feed_id", postgresql.UUID(as_uuid=True), nullable=True),
+    )
     op.create_foreign_key(
         "fk_links_feed_id",
         "links",
@@ -75,6 +79,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint("fk_links_feed_id", "links", type_="foreignkey")
+    op.drop_column("links", "feed_id")
     op.drop_index("idx_notifications_user_unread", table_name="notifications")
     op.drop_table("notifications")
     op.drop_index("idx_feed_items_feed", table_name="feed_items")

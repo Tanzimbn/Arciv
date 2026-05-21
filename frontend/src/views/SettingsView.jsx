@@ -195,67 +195,69 @@ export default function SettingsView({ onBack }) {
                   className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                 />
               </label>
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm text-gray-700">Telegram notifications</span>
-                <input
-                  type="checkbox"
-                  checked={notifyTelegram}
-                  onChange={(e) => setNotifyTelegram(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                />
-              </label>
+              {settings.telegram_enabled && (
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-sm text-gray-700">Telegram notifications</span>
+                  <input
+                    type="checkbox"
+                    checked={notifyTelegram}
+                    onChange={(e) => setNotifyTelegram(e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  />
+                </label>
+              )}
             </section>
 
-            <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Telegram Bot
-              </h2>
-              <div className="text-sm text-gray-600">
-                <p className="mb-2">
-                  Link your Telegram account to receive daily digests and save links by forwarding them to the bot.
-                </p>
-                <p className="text-xs text-gray-500">
-                  1. Generate a token below<br/>
-                  2. Send <code className="bg-gray-100 px-1 rounded">/start &lt;token&gt;</code> to @arciv_bot<br/>
-                  3. Your account will be linked automatically
-                </p>
-              </div>
-              
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={handleGenerateTelegramToken}
-                  disabled={generatingToken}
-                  className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {generatingToken ? "Generating..." : "Generate linking token"}
-                </button>
-                
-                {telegramToken && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Your token (copy this):</p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-xs font-mono break-all">
-                        {telegramToken}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(telegramToken);
-                          setSuccess("Token copied to clipboard!");
-                        }}
-                        className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
-                      >
-                        Copy
-                      </button>
+            {settings.telegram_enabled && (
+              <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 space-y-4">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Telegram Bot
+                </h2>
+                <div className="text-sm text-gray-600">
+                  <p className="mb-2">
+                    Link your Telegram account to receive daily digests and save links by forwarding them to the bot.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    1. Generate a token below<br/>
+                    2. Send <code className="bg-gray-100 px-1 rounded">/start &lt;token&gt;</code> to @arciv_bot<br/>
+                    3. Your account will be linked automatically
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleGenerateTelegramToken}
+                    disabled={generatingToken}
+                    className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {generatingToken ? "Generating..." : "Generate linking token"}
+                  </button>
+                  {telegramToken && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Your token (copy this):</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-xs font-mono break-all">
+                          {telegramToken}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(telegramToken);
+                            setSuccess("Token copied to clipboard!");
+                          }}
+                          className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Send this to @arciv_bot: <code className="bg-gray-100 px-1 rounded">/start {telegramToken}</code>
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Send this to @arciv_bot: <code className="bg-gray-100 px-1 rounded">/start {telegramToken}</code>
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
+                  )}
+                </div>
+              </section>
+            )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             {success && <p className="text-sm text-green-600">{success}</p>}

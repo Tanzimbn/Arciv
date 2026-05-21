@@ -25,6 +25,7 @@ def _build_response(user: User) -> SettingsResponse:
         ai_api_key_masked=masked,
         feed_notify_telegram=user.feed_notify_telegram,
         feed_notify_inapp=user.feed_notify_inapp,
+        telegram_enabled=settings.TELEGRAM_ENABLED,
     )
 
 
