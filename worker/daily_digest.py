@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
@@ -43,7 +43,7 @@ async def send_daily_digest():
         for user in users:
             try:
                 # Get new items from the last 24 hours
-                yesterday = datetime.utcnow() - timedelta(days=1)
+                yesterday = datetime.now(timezone.utc) - timedelta(days=1)
                 
                 async with AsyncSessionLocal() as session:
                     result = await session.execute(
@@ -108,7 +108,7 @@ async def create_quota_warning_notifications():
         # In a real implementation, you'd track per-user usage
         
         # Get today's date in UTC
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         
         # This is a placeholder for quota checking logic
         # In a real implementation, you'd check Redis for usage counts

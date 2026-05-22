@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, String, func, DateTime
+from sqlalchemy import BigInteger, Boolean, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,11 +18,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     telegram_link_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    telegram_link_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    telegram_link_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ai_provider: Mapped[str] = mapped_column(String(50), default="gemini")
     ai_api_key_enc: Mapped[str | None] = mapped_column(nullable=True)
     feed_notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
     feed_notify_inapp: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     links: Mapped[list["Link"]] = relationship("Link", back_populates="user")

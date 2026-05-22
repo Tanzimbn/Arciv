@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     ARRAY,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -44,16 +45,16 @@ class Link(Base):
     ai_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     ai_attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    ai_next_retry_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    ai_next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # User state
     status: Mapped[str] = mapped_column(String(20), default="active")
     fetch_status: Mapped[str] = mapped_column(String(20), default="ok")
-    done_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    saved_at: Mapped[datetime] = mapped_column(default=func.now())
-    processed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="links")
 

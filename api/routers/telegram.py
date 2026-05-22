@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
@@ -27,7 +27,7 @@ async def generate_telegram_link_token(
     # Store token with expiration (24 hours)
     # For MVP, we'll store it directly in the user table
     # In production, you'd want a separate tokens table
-    expires_at = datetime.utcnow() + timedelta(hours=24)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
     
     await db.execute(
         update(User)
@@ -88,7 +88,7 @@ async def get_daily_digest(
 ):
     """Get daily digest for a user (internal endpoint for Telegram bot)"""
     # Get links created in the last 24 hours from feeds
-    yesterday = datetime.utcnow() - timedelta(days=1)
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     
     result = await db.execute(
         select(Link, Feed)

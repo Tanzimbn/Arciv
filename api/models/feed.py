@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,12 +25,12 @@ class Feed(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     favicon_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
-    last_checked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_etag: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_modified: Mapped[str | None] = mapped_column(Text, nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
-    total_items_received: Mapped[int] = mapped_column(Integer, default=0) 
-    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    total_items_received: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     feed_items: Mapped[list["FeedItem"]] = relationship(
         "FeedItem", back_populates="feed", cascade="all, delete-orphan"
@@ -44,7 +44,7 @@ class FeedItem(Base):
     feed_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("feeds.id", ondelete="CASCADE"), nullable=False)
     guid: Mapped[str] = mapped_column(Text, nullable=False)
     link_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("links.id", ondelete="SET NULL"), nullable=True)
-    seen_at: Mapped[datetime] = mapped_column(default=func.now())
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     feed: Mapped["Feed"] = relationship("Feed", back_populates="feed_items")
 

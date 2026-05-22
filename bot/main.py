@@ -37,12 +37,12 @@ async def get_user_by_telegram_token(token: str) -> User | None:
     """Find user by their Telegram linking token"""
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
-        from datetime import datetime
-        
+        from datetime import datetime, timezone
+
         result = await session.execute(
             select(User).where(
                 User.telegram_link_token == token,
-                User.telegram_link_token_expires_at > datetime.utcnow()
+                User.telegram_link_token_expires_at > datetime.now(timezone.utc)
             )
         )
         return result.scalar_one_or_none()
