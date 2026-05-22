@@ -23,12 +23,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
+      # Split setup-node so PR runs don't write to the shared npm cache
+      # (a malicious PR could otherwise poison ~/.npm for main builds).
+      # Non-PR runs still get the cache speedup; PR runs reinstall fresh.
+      - name: Set up Node (cached, trusted runs)
+        if: github.event_name != 'pull_request'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Node (no cache, PR runs)
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Build frontend
         working-directory: frontend
@@ -63,6 +73,9 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Read the buildx layer cache on all runs (keeps PR builds fast), but
+      # only WRITE to it on trusted (non-PR) runs so a malicious PR can't
+      # poison cached layers that main builds would later consume.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -72,4 +85,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: ${{ github.event_name == 'pull_request' && '' || 'type=gha,mode=max' }}
