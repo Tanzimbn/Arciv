@@ -6,6 +6,7 @@ class SettingsResponse(BaseModel):
     ai_api_key_masked: str | None
     feed_notify_telegram: bool
     feed_notify_inapp: bool
+    telegram_enabled: bool
 
     model_config = {"from_attributes": True}
 

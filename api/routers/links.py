@@ -16,7 +16,7 @@ from api.utils.metadata import canonicalize_url, fetch_metadata
 router = APIRouter()
 
 
-@router.post("/", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
 async def create_link(
     body: LinkCreate,
     request: Request,
@@ -77,7 +77,7 @@ async def create_link(
     return link
 
 
-@router.get("/", response_model=list[LinkResponse])
+@router.get("", response_model=list[LinkResponse])
 async def list_links(
     queue: str | None = Query(None),
     page: int = Query(1, ge=1),

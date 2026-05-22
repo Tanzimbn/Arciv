@@ -1,5 +1,7 @@
 from agent.base import AIProvider
 
+VALID_PROVIDERS = {"gemini", "groq", "anthropic", "openai", "ollama"}
+
 
 def make_provider(provider: str, api_key: str) -> AIProvider:
     """Instantiate AI provider by name. api_key is base_url for ollama."""

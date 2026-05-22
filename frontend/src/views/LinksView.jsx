@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import LinkCard from "../components/LinkCard.jsx";
+import NotificationBell from "../components/NotificationBell.jsx";
 import QueueTabs from "../components/QueueTabs.jsx";
 import UrlInputBar from "../components/UrlInputBar.jsx";
 
-export default function LinksView({ onLogout }) {
+export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [links, setLinks] = useState([]);
   const [activeQueue, setActiveQueue] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -58,6 +59,15 @@ export default function LinksView({ onLogout }) {
     }
   }
 
+  async function handleRetryAI(id) {
+    try {
+      const updated = await api.retryAI(id);
+      setLinks((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    } catch {
+      // silently ignore
+    }
+  }
+
   async function handleDeleteConfirmed(id) {
     setDeleteConfirm(null);
     try {
@@ -72,19 +82,70 @@ export default function LinksView({ onLogout }) {
     <div className="min-h-screen bg-gray-50">
       {/* Top bar */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <span className="font-bold text-gray-900 text-lg flex-shrink-0">
-            Arciv
-          </span>
-          <div className="flex-1">
-            <UrlInputBar onSave={handleSave} loading={saving} />
+        <div className="max-w-3xl mx-auto px-4 py-3">
+          {/* Desktop layout */}
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="font-bold text-gray-900 text-lg flex-shrink-0">
+              Arciv
+            </span>
+            <div className="flex-1">
+              <UrlInputBar onSave={handleSave} loading={saving} />
+            </div>
+            <NotificationBell />
+            <button
+              onClick={onFeeds}
+              className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+            >
+              Feeds
+            </button>
+            <button
+              onClick={onSettings}
+              className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+            >
+              Settings
+            </button>
+            <button
+              onClick={onLogout}
+              className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
+            >
+              Logout
+            </button>
           </div>
-          <button
-            onClick={onLogout}
-            className="text-sm text-gray-400 hover:text-gray-600 flex-shrink-0"
-          >
-            Logout
-          </button>
+          
+          {/* Mobile layout */}
+          <div className="sm:hidden space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-900 text-lg">
+                Arciv
+              </span>
+              <div className="flex items-center gap-2">
+                <NotificationBell />
+                <button
+                  onClick={onLogout}
+                  className="text-sm text-gray-400 hover:text-gray-600"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+            <div className="flex-1">
+              <UrlInputBar onSave={handleSave} loading={saving} />
+            </div>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={onFeeds}
+                className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1 border border-gray-200 rounded-lg"
+              >
+                Feeds
+              </button>
+              <button
+                onClick={onSettings}
+                className="text-sm text-gray-400 hover:text-gray-600 px-3 py-1 border border-gray-200 rounded-lg"
+              >
+                Settings
+              </button>
+            </div>
+          </div>
         </div>
         {saveError && (
           <div className="max-w-3xl mx-auto px-4 pb-2">
@@ -117,6 +178,7 @@ export default function LinksView({ onLogout }) {
                 link={link}
                 onDone={handleDone}
                 onDelete={(id) => setDeleteConfirm(id)}
+                onRetryAI={handleRetryAI}
               />
             ))}
           </div>
