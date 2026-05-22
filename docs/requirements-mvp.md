@@ -107,7 +107,7 @@ AI makes Arciv smart, but it must never be a single point of failure. The system
 
 | Provider | Tier | Cost | Notes |
 |---|---|---|---|
-| **Google Gemini** (`gemini-1.5-flash`) | Free | Free up to quota | Default for new users, no card needed |
+| **Google Gemini** (`gemini-2.0-flash`) | Free | Free up to quota | Default for new users, no card needed |
 | **Groq** (`llama-3.1-8b-instant`) | Free | Free tier available | Fast inference, good for classification |
 | **Anthropic Claude** (`claude-haiku-4-5`) | Paid | ~$0.80 / 1M input tokens | Best quality, opt-in |
 | **OpenAI** (`gpt-4o-mini`) | Paid | ~$0.15 / 1M input tokens | Popular option, opt-in |

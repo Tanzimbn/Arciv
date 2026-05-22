@@ -5,7 +5,7 @@ from agent.prompt import AuthError, ParseError, QuotaError, build_combined_promp
 
 
 class GeminiProvider(AIProvider):
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
         genai.configure(api_key=api_key)
         self._model = genai.GenerativeModel(model)
 
