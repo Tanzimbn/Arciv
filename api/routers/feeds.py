@@ -41,7 +41,7 @@ async def discover(body: FeedDiscoverRequest):
     )
 
 
-@router.post("/", response_model=FeedResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FeedResponse, status_code=status.HTTP_201_CREATED)
 async def subscribe(
     body: FeedCreate,
     current_user: User = Depends(get_current_user),
@@ -78,7 +78,7 @@ async def subscribe(
     return feed
 
 
-@router.get("/", response_model=list[FeedResponse])
+@router.get("", response_model=list[FeedResponse])
 async def list_feeds(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

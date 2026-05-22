@@ -29,12 +29,12 @@ def _build_response(user: User) -> SettingsResponse:
     )
 
 
-@router.get("/", response_model=SettingsResponse)
+@router.get("", response_model=SettingsResponse)
 async def get_settings(current_user: User = Depends(get_current_user)):
     return _build_response(current_user)
 
 
-@router.patch("/", response_model=SettingsResponse)
+@router.patch("", response_model=SettingsResponse)
 async def update_settings(
     body: SettingsUpdate,
     current_user: User = Depends(get_current_user),
