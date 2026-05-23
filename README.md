@@ -1,279 +1,385 @@
-# Arciv — Smart Link Organizer
+<div align="center">
 
-> **Arciv** helps you save, organize, and get AI-powered summaries of links from across the web. Subscribe to blogs and get daily digests via Telegram.
+# Arciv
 
-![Arciv Screenshot](docs/images/screenshot-main.png)
+**A self-hostable, AI-powered link and feed manager.**
 
-## ✨ Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://www.docker.com/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-- **🔗 Smart Link Saving** — Paste any URL, get automatic metadata extraction and AI classification
-- **🤖 AI-Powered Organization** — Links are automatically categorized into Watch Later, Read Later, Try Later, or Inbox
-- **📝 AI Summaries** — Get concise 2-3 sentence summaries of articles and content
-- **📡 Blog Feed Tracking** — Subscribe to RSS/Atom feeds, get daily updates
-- **📱 Telegram Integration** — Save links by forwarding to bot, receive daily digests
-- **🔔 Smart Notifications** — In-app and Telegram notifications for new content
-- **🏠 Self-Hosted** — Your data stays private, docker-compose deployment
+</div>
 
-## 🚀 Quick Start
+> **Status:** Early alpha. The MVP is functional and self-hostable, but APIs and schemas may still change. Feedback and PRs welcome.
+
+Arciv is a personal read-it-later that thinks. Save any URL — the system pulls metadata, runs it through an AI provider you control, and routes it into the right queue (Watch Later, Read Later, Try Later, Inbox). Subscribe to RSS feeds and get notified when new posts appear — no spam, no auto-ingest.
+
+All five MVP phases are scaffolded: foundation, link saving, AI pipeline, feed tracker, notifications + optional Telegram.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [AI Providers](#ai-providers)
+- [Feed Tracking](#feed-tracking)
+- [Telegram Bot (Optional)](#telegram-bot-optional)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Development](#development)
+- [Monitoring](#monitoring)
+- [Security](#security)
+- [Deployment](#deployment)
+- [Contributing](#contributing)
+- [Roadmap](#roadmap)
+- [License](#license)
+
+---
+
+## Features
+
+- **Smart link saving** — paste a URL, get metadata extraction, canonicalization, and dedup at the DB level.
+- **AI-powered classification** — links are categorized as `article`, `video`, `tool`, `research-paper`, etc. and routed to the right queue. Each one gets a 2–3 sentence summary and a handful of tags.
+- **Bring your own provider** — works out of the box with **Gemini**, **Groq**, **Anthropic Claude**, **OpenAI**, or local **Ollama**. Keys are encrypted at rest with AES-256.
+- **Graceful AI fallback** — if no provider is configured (or the provider rate-limits you), links fall back to URL-pattern heuristics. The system never blocks on AI.
+- **Feed tracking, the polite way** — subscribe to RSS/Atom feeds and receive a single grouped notification per feed when new posts appear. **No auto-ingest** — you decide what to save. RSS auto-discovery, ETag/Last-Modified conditional polling, failure handling (degraded at 7 consecutive failures, dead at 30).
+- **In-app notifications** — bell icon with unread counter, accessible across the app.
+- **Optional Telegram bot** — link your account with a one-time token, save URLs via DM, receive daily digests. Off by default behind a feature flag.
+- **Single-command self-hosting** — `docker compose up`. Postgres, Redis, API, worker, all in one stack. Frontend served by FastAPI in production.
+- **Cron-driven feed polling** — configurable schedule (default daily at 08:00 UTC).
+
+## Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- 5 minutes of free time
+- Docker and Docker Compose v2 (`docker compose`, not `docker-compose`)
+- A few minutes
 
-### 1. Clone and Setup
+### 1. Clone and configure
 
 ```bash
-git clone https://github.com/yourusername/arciv.git
-cd arciv
+git clone https://github.com/Tanzimbn/Arciv.git
+cd Arciv
 cp .env.example .env
 ```
 
-### 2. Configure Environment
-
-Generate secure secrets:
+### 2. Generate secrets
 
 ```bash
-openssl rand -hex 32  # Copy to SECRET_KEY in .env
-openssl rand -hex 32  # Copy to ENCRYPTION_KEY in .env
+# Two 32-byte hex strings — paste into SECRET_KEY and ENCRYPTION_KEY in .env
+openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-Optional but recommended:
-- Get a free Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-- Create a Telegram bot with [@BotFather](https://t.me/BotFather)
+### 3. (Optional) Add a free AI provider key
 
-Add these to your `.env` file.
+Either:
+- A personal Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) — set in Settings after first login.
+- A shared Gemini key at the server level via `SHARED_GEMINI_KEY` in `.env` (capped at 20 calls/user/day).
 
-### 3. Launch Arciv
+If neither is set, AI is skipped and links route by URL heuristics. The system stays fully functional.
+
+### 4. Launch
 
 ```bash
 docker compose up -d
 ```
 
-That's it! Arciv will be running at http://localhost:8000
+Arciv is now serving at **http://localhost:8000**. Migrations run automatically on API startup.
 
-### 4. First Steps
+### 5. First steps
 
-1. **Create an account** at http://localhost:8000
-2. **Save your first link** — paste any URL in the input bar
-3. **Configure AI** — Go to Settings to add your AI provider key
-4. **Subscribe to feeds** — Add your favorite blogs in the Feeds section
-5. **Link Telegram** — Generate a token in Settings to connect the bot
+1. Register at http://localhost:8000.
+2. Save a link from the input bar at the top.
+3. Visit **Settings** to configure your AI provider (optional).
+4. Visit **Feeds** to subscribe to a blog.
 
-## 📸 Screenshots
+## Configuration
 
-### Main Interface
-![Main Interface](docs/images/screenshot-main.png)
-*Clean, focused interface for saving and organizing links*
+All configuration is via `.env`. See [.env.example](.env.example) for every variable with inline documentation.
 
-### AI-Powered Classification
-![AI Classification](docs/images/screenshot-ai.png)
-*Links are automatically categorized with AI summaries and tags*
+### Required
 
-### Feed Management
-![Feed Management](docs/images/screenshot-feeds.png)
-*Subscribe to blogs and track new content automatically*
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection URL (provided by Compose default) |
+| `REDIS_URL` | Redis URL for the ARQ job queue (provided by Compose default) |
+| `SECRET_KEY` | JWT signing key — generate with `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | AES-256 key for stored AI provider keys — generate with `openssl rand -hex 32` |
 
-### Telegram Integration
-![Telegram Bot](docs/images/screenshot-telegram.png)
-*Save links by forwarding and receive daily digests*
+### Optional
 
-## 🏗️ Architecture
+| Variable | Default | Purpose |
+|---|---|---|
+| `SHARED_GEMINI_KEY` | *unset* | Shared free-tier Gemini key for users without their own. Capped at 20 calls/user/day. |
+| `FEED_POLL_CRON` | `0 8 * * *` | When to poll all feeds. Only minute and hour are honored. |
+| `USER_AGENT` | `Arciv/0.1 (+https://github.com/Tanzimbn/Arciv)` | Outbound HTTP User-Agent for feed/metadata fetches. Set this on a public instance so site operators can reach you. |
+| `TELEGRAM_ENABLED` | `false` | Master switch for all Telegram features. See [Telegram Bot](#telegram-bot-optional). |
+| `TELEGRAM_BOT_TOKEN` | *unset* | Required only when `TELEGRAM_ENABLED=true`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | JWT lifetime in minutes (default 7 days). |
+| `ENVIRONMENT` | `development` | Set to `production` for production deploys. |
 
-Arciv is built with modern, reliable technologies:
+## AI Providers
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Backend** | Python + FastAPI | Async API with automatic documentation |
-| **Database** | PostgreSQL | Reliable data storage with full-text search |
-| **Queue** | Redis + ARQ | Persistent job processing for AI and feeds |
-| **Frontend** | React + Vite + TailwindCSS | Modern, responsive web interface |
-| **AI** | Multiple Providers | Gemini, Groq, Claude, OpenAI, Ollama support |
-| **Bot** | python-telegram-bot | Telegram integration for notifications |
+Configure your provider in **Settings**. The system uses one provider at a time per user; API keys are encrypted with AES-256 before they hit the database.
 
-## 🔧 Configuration
+| Provider | Default model | Cost | Notes |
+|---|---|---|---|
+| **Google Gemini** | `gemini-2.0-flash` | Free tier available | Default. Free-tier quota varies by region. |
+| **Groq** | `llama-3.1-8b-instant` | Free tier available | Fast inference, generous free quota. |
+| **Anthropic Claude** | `claude-haiku-4-5` | Paid | Best quality for the cost. |
+| **OpenAI** | `gpt-4o-mini` | Paid | Industry standard. |
+| **Ollama** | Local | Free | Self-host the model alongside Arciv. |
 
-### Environment Variables
+**Retry behavior:** AI jobs retry on transient errors at 2 min → 10 min → 1 hour, then mark `ai-failed`. Failed jobs are swept back into the queue hourly. If your account has zero quota (`limit: 0`), all retries will fail — switch providers or top up.
 
-See `.env.example` for all configuration options. Key variables:
+## Feed Tracking
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `REDIS_URL` | ✅ | Redis connection for job queue |
-| `SECRET_KEY` | ✅ | JWT signing key (generate with `openssl rand -hex 32`) |
-| `ENCRYPTION_KEY` | ✅ | AES-256 key for API keys (generate with `openssl rand -hex 32`) |
-| `TELEGRAM_BOT_TOKEN` | ❌ | Bot token for Telegram integration |
-| `SHARED_GEMINI_KEY` | ❌ | Shared Gemini key for free tier users |
+Feeds are **notification-only**, not auto-ingest. This is a deliberate product decision.
 
-### AI Providers
+**What this means:**
+- Subscribing to a feed records the URL plus its current item GUIDs. No `Link` rows are created at subscription time.
+- When the daily poll finds new posts, you get **one grouped notification per feed** listing each post's title and URL.
+- You decide what to save. Paste interesting URLs into the link input bar — the standard AI pipeline runs on them.
 
-Arciv supports multiple AI providers:
+**Why:** feeds in Arciv act as an *alert source*, not a pipeline that pumps posts into your read queue. You explicitly endorse what you want to read.
 
-1. **Google Gemini** (Free tier available)
-2. **Groq** (Fast inference, free tier)
-3. **Anthropic Claude** (Paid, high quality)
-4. **OpenAI GPT** (Paid)
-5. **Ollama** (Local, self-hosted)
+**Polling:**
+- Daily cron at 08:00 UTC (override with `FEED_POLL_CRON`).
+- Uses `ETag` and `If-Modified-Since` to avoid re-downloading unchanged feeds.
+- 7 consecutive failures → feed marked `degraded` (still polled).
+- 30 consecutive failures → feed marked `dead` (skipped, user notified).
 
-Users can select their preferred provider in Settings.
+## Telegram Bot (Optional)
 
-## 📡 Telegram Bot Setup
+Disabled by default. To enable:
 
-1. Create a bot with [@BotFather](https://t.me/BotFather)
-2. Copy the bot token to `TELEGRAM_BOT_TOKEN` in `.env`
-3. Restart Arciv: `docker compose restart bot`
-4. In Arciv Settings, generate a linking token
-5. Send `/start <token>` to your bot
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
+2. In `.env`:
+   ```env
+   TELEGRAM_ENABLED=true
+   TELEGRAM_BOT_TOKEN=<your-token>
+   ```
+3. Start the bot service (it's behind a Compose profile):
+   ```bash
+   docker compose --profile telegram up -d
+   ```
+4. In the Arciv UI, go to **Settings → Telegram** and generate a linking token.
+5. Send `/start <token>` to your bot.
 
-**Bot Features:**
-- Save links by forwarding URLs
-- Receive daily digests of new feed items
-- Get notifications about feed updates
+**What the bot does:**
+- Forward any URL to it → it's saved as a link in your account (full AI pipeline runs).
+- Daily digest at 09:00 UTC — same content as the in-app notification.
 
-## 🔄 Daily Feed Polling
+**When disabled** (`TELEGRAM_ENABLED=false`, the default), the `/api/telegram/*` routes aren't registered, the digest cron is skipped, and the `bot` service doesn't start.
 
-Arciv automatically checks all subscribed feeds for new content:
+## Architecture
 
-- **Default schedule**: Daily at 08:00 UTC
-- **Configurable**: Set any cron schedule via `FEED_POLL_CRON`
-- **Smart polling**: Uses ETags and Last-Modified headers to avoid unnecessary requests
-- **Failure handling**: Automatic retry with exponential backoff
+| Layer | Technology | Why |
+|---|---|---|
+| Backend API | Python + FastAPI (async) | Async I/O suits the AI + RSS workload |
+| Job queue | ARQ + Redis | Persistent jobs survive worker restarts |
+| Database | PostgreSQL 16 | Reliability + `TIMESTAMPTZ` + future pgvector |
+| Frontend | React + Vite + TailwindCSS | Built into a static bundle, served by FastAPI |
+| Auth | JWT (`python-jose`) + bcrypt | Stateless, no session store |
+| Encryption | `cryptography` (AES-GCM) | API keys at rest |
+| Feed parsing | `feedparser` | Handles RSS 1.0, 2.0, Atom |
+| Scraping | `httpx` + `BeautifulSoup4` | Async metadata fetch |
+| Telegram bot | `python-telegram-bot` (long-poll) | No webhook required |
+| Migrations | Alembic | Async-aware migration env |
+| Deployment | Docker + Docker Compose | One-command self-hosting |
 
-## 🛠️ Development
+**Design principles** (from [CLAUDE.md](CLAUDE.md)):
+- **AI is async and never blocking.** `POST /api/links` returns within 500ms; AI runs in the worker.
+- **AI is optional.** Without a provider, links route via URL heuristics.
+- **All data scoped by `user_id`.** Every query filters on the authenticated user.
+- **API keys encrypted at rest.** Decrypted only in worker memory, never returned to the client.
 
-### Local Development
+## Project Structure
+
+```
+arciv/
+├── api/                # FastAPI app — routers, models, schemas, middleware, utils
+├── agent/              # AI provider abstraction + 5 provider implementations
+├── worker/             # ARQ jobs — ai_classify, feed_poll, daily_digest
+├── bot/                # Telegram bot (long-polling)
+├── db/migrations/      # Alembic versions
+├── frontend/           # React SPA (Vite + Tailwind)
+├── docs/               # Spec, ADRs, screenshots
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── Dockerfile
+└── .env.example
+```
+
+## Development
+
+### Backend (without Docker for the app, with Docker for db/redis)
 
 ```bash
-# Install dependencies
+# Backing services
+docker compose up -d db redis
+
+# Python deps
 pip install -r requirements.txt
-npm install
 
-# Start database and Redis
-docker compose up db redis -d
-
-# Run database migrations
+# Migrations
 alembic upgrade head
 
-# Start API server
+# API
 uvicorn api.main:app --reload
 
-# Start worker (in another terminal)
-python -m arq worker.worker.WorkerSettings
+# Worker (separate terminal)
+arq worker.worker.WorkerSettings
 
-# Start frontend (in another terminal)
-cd frontend && npm run dev
-
-# Start bot (optional)
+# Telegram bot (only if TELEGRAM_ENABLED=true)
 python bot/main.py
 ```
 
-### Database Migrations
+### Frontend
 
 ```bash
-# Create new migration
-alembic revision --autogenerate -m "Description"
+cd frontend
+npm ci
+npm run dev          # dev server at http://localhost:5173 (proxies /api to :8000)
+npm run build        # builds frontend/dist for production
+```
 
-# Apply migrations
+### Database migrations
+
+```bash
+# Create a new migration after editing a model
+alembic revision --autogenerate -m "describe the change"
+
+# Apply
 alembic upgrade head
 
-# Rollback migration
+# Rollback one revision
 alembic downgrade -1
 ```
 
-### Adding New AI Providers
+### Adding a new AI provider
 
-1. Create provider class in `api/utils/ai_providers/`
-2. Implement the `AIProvider` interface
-3. Add to provider list in Settings
-4. Update documentation
+1. Implement the `AIProvider` interface in [agent/providers/](agent/providers/) (subclass `agent.base.AIProvider`).
+2. Register it in [agent/registry.py](agent/registry.py)'s `make_provider` factory.
+3. Add the provider name to the `_ALLOWED_PROVIDERS` set in [api/routers/settings.py](api/routers/settings.py) so users can select it.
+4. Update this table in the README.
 
-## 📊 Monitoring
+## Monitoring
 
-### Health Check
+### Health check
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Returns system status including API, database, Redis, and last feed poll time.
+Returns API status plus database, Redis, and last feed poll timestamp.
 
 ### Logs
 
 ```bash
-# View all logs
-docker compose logs -f
-
-# View specific service logs
-docker compose logs -f api
-docker compose logs -f worker
-docker compose logs -f bot
+docker compose logs -f          # all services
+docker compose logs -f api      # API only
+docker compose logs -f worker   # worker only
 ```
 
-## 🔒 Security
+## Security
 
-- **API Keys**: Encrypted at rest with AES-256
-- **Authentication**: JWT tokens with configurable expiration
-- **Rate Limiting**: 30 links per user per hour
-- **Input Validation**: All URLs are validated and canonicalized
-- **Database**: All queries scoped to authenticated users
+- **Encryption at rest:** AI provider API keys are AES-GCM encrypted with `ENCRYPTION_KEY` before storage. Rotating `ENCRYPTION_KEY` invalidates all stored keys (users re-enter them).
+- **Authentication:** JWT tokens signed with `SECRET_KEY` (HS256), default 7-day expiry.
+- **Multi-tenancy:** every database query filters on `user_id`. Cross-user access is structurally impossible.
+- **SSRF protection:** outbound HTTP requests refuse private network ranges and non-`http(s)` schemes.
+- **URL canonicalization:** trailing slashes normalized, tracking params (`utm_*`, `fbclid`, `gclid`, `ref`) stripped, redirects followed before storage.
+- **CI hardening:** PR builds in GitHub Actions never write to shared caches (no cache-poisoning vector).
 
-## 🚀 Deployment
+## Deployment
 
-### Production Deployment
+### Production with Docker Compose
 
-1. **Update `.env`**:
-   ```env
-   ENVIRONMENT=production
-   SECRET_KEY=<your-secure-secret>
-   ENCRYPTION_KEY=<your-secure-encryption-key>
-   ```
+```bash
+cp .env.example .env
+# Edit .env: set ENVIRONMENT=production, generate fresh secrets, enable Telegram if wanted
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
 
-2. **Deploy with Docker Compose**:
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-   ```
+### Pre-built images
 
-3. **Set up reverse proxy** (nginx, Caddy, etc.) to handle HTTPS
+GHCR images are published on every push to `main` and on version tags (`v*`), multi-platform (amd64 + arm64):
 
-### Environment Considerations
+```
+ghcr.io/tanzimbn/arciv:latest
+ghcr.io/tanzimbn/arciv:v0.1.0
+ghcr.io/tanzimbn/arciv:sha-<short>
+```
 
-- **Memory**: Minimum 2GB RAM recommended
-- **Storage**: 10GB minimum for database growth
-- **Network**: Stable internet connection for AI APIs and feed polling
+Use any of these in your own Compose file.
 
-## 🤝 Contributing
+### Reverse proxy
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Run the test suite: `pytest`
-5. Submit a pull request
+For HTTPS, terminate TLS in a reverse proxy (nginx, Caddy, Traefik). An example nginx config is included as [nginx.conf](nginx.conf).
 
-## 📝 License
+### Sizing
 
-MIT License - see [LICENSE](LICENSE) file for details.
+- **Memory:** 1 GB minimum (Postgres + Redis + Python services). 2 GB recommended.
+- **Storage:** 1 GB for the OS layers + database growth (links + summaries are small, ~1 KB each).
+- **Network:** outbound HTTPS to AI providers and feed sources.
 
-## 🆘 Support
+## Contributing
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/arciv/issues)
-- **Documentation**: [docs/](docs/)
-- **Community**: [Discussions](https://github.com/yourusername/arciv/discussions)
+PRs welcome. The project is small enough that a single PR can land a meaningful feature.
 
-## 🗺️ Roadmap
+1. Fork the repo and create a feature branch from `main` (e.g. `feat/full-text-search`).
+2. Make your change. Keep commits focused — one concern per commit, conventional-commits style (`fix(api): …`, `feat(agent): …`).
+3. Test what you can — health check, manual flow through the relevant routes.
+4. Open a PR against `main` with a description of *why* the change exists. CI will build the Docker image to validate.
 
-### v0.2.0 (Planned)
-- [ ] Full-text search
-- [ ] Topic clustering
-- [ ] Browser extension
-- [ ] Data export functionality
+If you're working on something that touches the spec (`docs/requirements-mvp.md`), call out the deviation in the PR description.
 
-### v0.3.0 (Future)
-- [ ] Multi-user support
-- [ ] Advanced analytics
-- [ ] Mobile app
-- [ ] OAuth providers
+### Project guidelines
+
+- **Python is async everywhere.** Routers, DB sessions, `httpx`, and ARQ jobs. Avoid sync calls in request paths.
+- **Every datetime is timezone-aware UTC.** Use `datetime.now(timezone.utc)`, never `datetime.utcnow()`.
+- **Every DB query filters on `user_id`.** No exceptions.
+- **New ARQ jobs must be registered** in [worker/worker.py](worker/worker.py) `WorkerSettings.functions`.
+- **Touching a model? Add a new migration.** Don't edit existing ones.
+
+## Roadmap
+
+### v0.2 (next)
+- Browser extension for one-click save
+- Full-text search over link titles + summaries
+- Data export (JSON, OPML for feeds)
+- Better error visibility in the UI (AI failures, feed degradation)
+
+### v0.3 (later)
+- Topic clustering via embeddings (pgvector)
+- Multi-user support with admin UI
+- OAuth providers for login
+- Mobile-friendly responsive polish
+
+### Open ideas
+- Webhook destinations for new feed items (Discord, Slack)
+- iOS/Android share-sheet integration
+- Per-feed AI prompt overrides
+
+Got an idea? Open a [Discussion](https://github.com/Tanzimbn/Arciv/discussions).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Acknowledgements
+
+- [FastAPI](https://fastapi.tiangolo.com/), [ARQ](https://arq-docs.helpmanual.io/), [SQLAlchemy](https://www.sqlalchemy.org/), [feedparser](https://feedparser.readthedocs.io/) — the backbone of the backend.
+- [Vite](https://vitejs.dev/) + [TailwindCSS](https://tailwindcss.com/) — for the frontend.
+- The teams behind Gemini, Groq, Claude, OpenAI, and Ollama for making BYOK practical.
 
 ---
 
-**Built with ❤️ for people who love to read and learn**
+<div align="center">
+Made for people who want to read more deliberately.
+</div>
