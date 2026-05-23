@@ -63,10 +63,9 @@ def upgrade() -> None:
         postgresql_where=sa.text("is_read = false"),
     )
 
-    op.add_column(
-        "links",
-        sa.Column("feed_id", postgresql.UUID(as_uuid=True), nullable=True),
-    )
+    # links.feed_id was already created in migration 0001 (the column had to
+    # exist before the Link model used it). Only the FK is added here, since
+    # the `feeds` table doesn't exist until this migration runs.
     op.create_foreign_key(
         "fk_links_feed_id",
         "links",
@@ -105,8 +104,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS trg_link_feed_ownership ON links;")
     op.execute("DROP FUNCTION IF EXISTS check_link_feed_ownership();")
+    # Mirror of upgrade(): drop the FK but leave the column intact —
+    # 0001 owns its lifecycle.
     op.drop_constraint("fk_links_feed_id", "links", type_="foreignkey")
-    op.drop_column("links", "feed_id")
     op.drop_index("idx_notifications_user_unread", table_name="notifications")
     op.drop_table("notifications")
     op.drop_index("idx_feed_items_feed", table_name="feed_items")
