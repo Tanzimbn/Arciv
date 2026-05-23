@@ -6,6 +6,12 @@
 
 set -e
 
+# Apply any pending Alembic migrations before serving traffic. The
+# docker-compose files do this in their command override, but a bare
+# `docker run` (e.g. Render's free Web Service) bypasses compose, so we
+# do it here. Idempotent — does nothing if the schema is already current.
+alembic upgrade head
+
 # Start the ARQ worker in the background. It shares the container's
 # Python install, env vars, and network namespace with uvicorn.
 arq worker.worker.WorkerSettings &
