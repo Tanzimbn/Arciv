@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,4 +50,5 @@ class FeedItem(Base):
 
     __table_args__ = (
         Index("idx_feed_items_feed", "feed_id"),
+        UniqueConstraint("feed_id", "guid", name="uq_feed_items_feed_guid"),
     )
