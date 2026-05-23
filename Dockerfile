@@ -1,5 +1,9 @@
-# Stage 1: build the React frontend
-FROM node:20-alpine AS frontend-build
+# Stage 1: build the React frontend.
+# Pin to the native build platform — the output (HTML/JS) is arch-agnostic, so
+# there's no reason to rebuild it inside an emulated arm64 container. Without
+# this, multi-platform CI runs `npm ci` twice (once per arch) and the arm64
+# leg can take 30+ minutes under QEMU.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-build
 
 WORKDIR /frontend
 
