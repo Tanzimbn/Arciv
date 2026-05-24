@@ -34,4 +34,8 @@ COPY . .
 RUN rm -rf frontend/dist
 COPY --from=frontend-build /frontend/dist ./frontend/dist
 
+# Ensure the combined-startup script is executable even when authored on
+# Windows (which doesn't preserve Unix exec bits across COPY).
+RUN chmod +x /app/bin/start.sh
+
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

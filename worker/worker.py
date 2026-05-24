@@ -27,3 +27,8 @@ class WorkerSettings:
     cron_jobs = _cron_jobs
     max_jobs = 10
     job_timeout = 120
+    # Slow idle Redis polling 10x to stay inside Upstash's 500K commands/month
+    # free tier. Trade-off: a freshly-enqueued job may sit in the queue up to
+    # `poll_delay` seconds before the worker picks it up. Acceptable for AI
+    # classification (LLM call itself takes seconds) and feed polling (daily).
+    poll_delay = 10.0
