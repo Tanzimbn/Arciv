@@ -1,28 +1,56 @@
 const TABS = [
-  { key: null, label: "All" },
-  { key: "watch-later", label: "Watch Later" },
-  { key: "read-later", label: "Read Later" },
-  { key: "try-later", label: "Try Later" },
-  { key: "inbox", label: "Inbox" },
-  { key: "archive", label: "Archive" },
+  { key: null,           label: "All",         color: "var(--muted)",   desc: "Everything you've saved" },
+  { key: "watch-later", label: "Watch Later",  color: "var(--watch)",   desc: "Videos queued for when you have time" },
+  { key: "read-later",  label: "Read Later",   color: "var(--read)",    desc: "Long-reads, articles, and essays" },
+  { key: "try-later",   label: "Try Later",    color: "var(--try)",     desc: "Tools and products to explore" },
+  { key: "inbox",       label: "Inbox",        color: "var(--inbox)",   desc: "Links AI couldn't classify — sort manually or retry" },
+  { key: "archive",     label: "Archive",      color: "var(--archive)", desc: "Links you've marked done — your personal trail" },
 ];
 
-export default function QueueTabs({ active, onChange }) {
+export default function QueueTabs({ active, onChange, counts = {} }) {
   return (
-    <div className="flex gap-1 flex-wrap">
-      {TABS.map(({ key, label }) => (
-        <button
-          key={String(key)}
-          onClick={() => onChange(key)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            active === key
-              ? "bg-indigo-600 text-white"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
+    <div>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 4, overflowX: "auto",
+        background: "var(--surface)", border: "1px solid var(--line)",
+        borderRadius: 12, padding: 4, boxShadow: "var(--shadow-card)",
+        scrollbarWidth: "none",
+      }}>
+        {TABS.map(({ key, label, color }) => {
+          const isActive = active === key;
+          const count = counts[key ?? "all"] ?? 0;
+          return (
+            <button
+              key={String(key)}
+              onClick={() => onChange(key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 8, border: 0, cursor: "pointer",
+                fontSize: 13, fontWeight: isActive ? 600 : 500,
+                background: isActive ? "var(--ink)" : "transparent",
+                color: isActive ? "var(--surface)" : "var(--muted)",
+                transition: "background .12s, color .12s",
+                whiteSpace: "nowrap", flexShrink: 0,
+              }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--ink-2)"; }}}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}}
+            >
+              {key !== null && (
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: color, flexShrink: 0, opacity: isActive ? 0.85 : 0.7 }} />
+              )}
+              {label}
+              <span style={{
+                fontSize: 10.5, fontFamily: "monospace", fontWeight: 500,
+                padding: "1px 5px", borderRadius: 5,
+                background: isActive ? "rgba(255,255,255,.15)" : "rgba(31,28,21,.06)",
+                color: isActive ? "rgba(255,255,255,.8)" : "var(--muted)",
+              }}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

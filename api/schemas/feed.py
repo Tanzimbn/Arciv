@@ -20,10 +20,12 @@ class FeedCreate(BaseModel):
     feed_url: str
     title: str
     favicon_url: str | None = None
+    category: str | None = None
 
 
 class FeedUpdate(BaseModel):
     status: str | None = None  # active | paused
+    category: str | None = None
 
 
 class FeedResponse(BaseModel):
@@ -36,6 +38,7 @@ class FeedResponse(BaseModel):
     last_checked_at: datetime | None
     consecutive_failures: int
     total_items_received: int
+    category: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

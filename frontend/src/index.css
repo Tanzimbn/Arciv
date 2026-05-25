@@ -1,3 +1,271 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Arciv design system — warm cream palette ───────────────── */
+:root {
+  --bg: #efe7d8;
+  --nav: #f6f0e3;
+  --surface: #fbf7ee;
+  --surface-2: #f3ecdc;
+  --ink: #1f1c15;
+  --ink-2: #423d31;
+  --muted: #847e6e;
+  --muted-2: #ada593;
+  --line: rgba(31,28,21,.10);
+  --line-2: rgba(31,28,21,.05);
+
+  --accent: #6d3aff;
+  --accent-deep: #4a1fc7;
+  --accent-tint: #f1ebff;
+  --accent-tint-2: #ebe2ff;
+  --accent-ink: #ffffff;
+
+  --read: #ff6b3d;
+  --read-tint: #fff1eb;
+  --watch: #2a6fdb;
+  --watch-tint: #e9f0fc;
+  --try: #14a974;
+  --try-tint: #e6f6ee;
+  --inbox: #b18800;
+  --inbox-tint: #fbf3d9;
+  --archive: #6b6964;
+  --archive-tint: #efeeea;
+
+  --good: #14a974;
+  --good-tint: #e6f6ee;
+  --warn: #b18800;
+  --warn-tint: #fbf3d9;
+  --bad: #cc3a3a;
+  --bad-tint: #fbe8e8;
+
+  --shadow-card: 0 1px 0 rgba(22,21,19,.04), 0 1px 2px rgba(22,21,19,.04);
+  --shadow-pop: 0 1px 0 rgba(22,21,19,.04), 0 12px 32px -8px rgba(22,21,19,.18), 0 4px 12px -4px rgba(22,21,19,.08);
+
+  /* Always-dark button — does not invert in dark mode */
+  --btn-dark: #1f1c15;
+  --btn-dark-hover: #000000;
+  --btn-dark-text: #ffffff;
+}
+
+html.dark { background: #0e0d0c; }
+
+body.dark {
+  --btn-dark: #0e0d0c;
+  --btn-dark-hover: #000000;
+  --bg: #0e0d0c;
+  --nav: #161410;
+  --surface: #191815;
+  --surface-2: #1f1d1a;
+  --ink: #f5f3ee;
+  --ink-2: #d6d2c8;
+  --muted: #878379;
+  --muted-2: #5a5751;
+  --line: rgba(245,243,238,.08);
+  --line-2: rgba(245,243,238,.05);
+  --accent-tint: #251a40;
+  --accent-tint-2: #321f5c;
+  --read-tint: rgba(255,107,61,.12);
+  --watch-tint: rgba(42,111,219,.14);
+  --try-tint: rgba(20,169,116,.14);
+  --inbox-tint: rgba(177,136,0,.16);
+  --archive-tint: rgba(245,243,238,.07);
+  --good-tint: rgba(20,169,116,.14);
+  --warn-tint: rgba(177,136,0,.16);
+  --bad-tint: rgba(204,58,58,.12);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+::selection { background: var(--accent-tint-2); color: var(--ink); }
+
+/* Classifying card animated gradient border */
+.arciv-classifying {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(120deg, var(--accent), #ff6b3d, #14a974, var(--accent)) border-box;
+  background-size: auto, 200% 200%;
+  animation: arciv-shimmer 3s linear infinite;
+}
+@keyframes arciv-shimmer {
+  0%   { background-position: 0 0, 0% 0%; }
+  100% { background-position: 0 0, 200% 0%; }
+}
+
+/* Ping for status dots */
+@keyframes arciv-ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+
+/* ── Auth fields — rotating conic gradient border (dimmer) ─── */
+@property --arciv-auth-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+.arciv-lit-wrap {
+  position: relative;
+  border-radius: 12px;
+  isolation: isolate;
+}
+.arciv-lit-wrap::before {
+  content: "";
+  position: absolute; inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--arciv-auth-angle),
+    transparent 0deg,
+    color-mix(in oklab, var(--accent) 85%, #fff) 22deg,
+    transparent 70deg,
+    transparent 180deg,
+    color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg,
+    transparent 248deg,
+    transparent 360deg
+  );
+  animation: arciv-auth-spin 5s linear infinite;
+  z-index: -2; opacity: .35;
+  transition: opacity .25s, inset .2s, filter .25s;
+}
+.arciv-lit-wrap::after {
+  content: "";
+  position: absolute; inset: -1.5px;
+  border-radius: inherit;
+  z-index: -3; filter: blur(14px); opacity: 0;
+  transition: opacity .25s;
+  background: conic-gradient(
+    from var(--arciv-auth-angle),
+    transparent 0deg,
+    color-mix(in oklab, var(--accent) 85%, #fff) 22deg,
+    transparent 70deg,
+    transparent 180deg,
+    color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg,
+    transparent 248deg,
+    transparent 360deg
+  );
+  animation: arciv-auth-spin 5s linear infinite;
+}
+.arciv-lit-wrap:hover::before  { opacity: .7; }
+.arciv-lit-wrap:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
+.arciv-lit-wrap:focus-within::after  { opacity: .55; }
+@keyframes arciv-auth-spin { to { --arciv-auth-angle: 360deg; } }
+
+/* ── URL saver — rotating conic gradient border ─────────────── */
+@property --arciv-saver-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+.arciv-saver-wrap {
+  position: relative;
+  border-radius: 13px;
+  isolation: isolate;
+}
+.arciv-saver-wrap::before {
+  content: "";
+  position: absolute; inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--arciv-saver-angle),
+    transparent 0deg,
+    color-mix(in oklab, var(--accent) 85%, #fff) 22deg,
+    transparent 70deg,
+    transparent 180deg,
+    color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg,
+    transparent 248deg,
+    transparent 360deg
+  );
+  animation: arciv-saver-spin 5s linear infinite;
+  z-index: -2;
+  opacity: .55;
+  transition: opacity .25s, inset .2s, filter .25s;
+}
+.arciv-saver-wrap::after {
+  content: "";
+  position: absolute; inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--arciv-saver-angle),
+    transparent 0deg,
+    color-mix(in oklab, var(--accent) 85%, #fff) 22deg,
+    transparent 70deg,
+    transparent 180deg,
+    color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg,
+    transparent 248deg,
+    transparent 360deg
+  );
+  animation: arciv-saver-spin 5s linear infinite;
+  z-index: -3;
+  filter: blur(14px);
+  opacity: 0;
+  transition: opacity .25s;
+}
+.arciv-saver-wrap:hover::before  { opacity: .9; }
+.arciv-saver-wrap:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
+.arciv-saver-wrap:focus-within::after  { opacity: .55; }
+@keyframes arciv-saver-spin { to { --arciv-saver-angle: 360deg; } }
+
+/* Toast */
+@keyframes arciv-toastin {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
+.arciv-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: var(--ink);
+  color: var(--surface);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  animation: arciv-toastin 0.2s ease-out;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+}
+
+/* List layout */
+body.layout-list .arciv-card {
+  flex-direction: row !important;
+}
+
+/* Touch scroll for tabs */
+.arciv-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.arciv-scroll-x::-webkit-scrollbar { display: none; }
+
+/* Responsive page padding */
+@media (max-width: 639px) {
+  .arciv-page-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  .arciv-stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .arciv-cards-grid { grid-template-columns: 1fr !important; }
+  .arciv-page-head { flex-direction: column !important; align-items: flex-start !important; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(22,21,19,.12);
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+  background-clip: content-box;
+}
+body.dark ::-webkit-scrollbar-thumb {
+  background: rgba(245,243,238,.12);
+  background-clip: content-box;
+  border: 2px solid var(--bg);
+}
