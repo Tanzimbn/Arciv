@@ -27,8 +27,8 @@ export default function QueueTabs({ active, onChange, counts = {} }) {
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 12px", borderRadius: 8, border: 0, cursor: "pointer",
                 fontSize: 13, fontWeight: isActive ? 600 : 500,
-                background: isActive ? "var(--ink)" : "transparent",
-                color: isActive ? "var(--surface)" : "var(--muted)",
+                background: isActive ? "var(--btn-dark)" : "transparent",
+                color: isActive ? "var(--btn-dark-text)" : "var(--muted)",
                 transition: "background .12s, color .12s",
                 whiteSpace: "nowrap", flexShrink: 0,
               }}

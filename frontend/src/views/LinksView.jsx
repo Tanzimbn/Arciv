@@ -52,6 +52,12 @@ const LogoutIcon = () => (
   </svg>
 );
 
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
+
 function NavIconBtn({ onClick, title, children, hoverBg, hoverColor }) {
   const [hov, setHov] = useState(false);
   return (
@@ -161,6 +167,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [toast, setToast] = useState(null);
   const [dark, setDark] = useState(() => localStorage.getItem("arciv_dark") === "1");
   const [layout, setLayout] = useState(() => localStorage.getItem("arciv_layout") || "grid");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // apply body classes
   useEffect(() => {
@@ -178,8 +185,11 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getLinks({ limit: 500 });
-      setAllLinks(data);
+      const [active, archived] = await Promise.all([
+        api.getLinks({ limit: 500 }),
+        api.getLinks({ queue: "archive", limit: 500 }),
+      ]);
+      setAllLinks([...active, ...archived]);
     } catch {
       // token may be expired
     } finally {
@@ -191,10 +201,21 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
 
   // Filter links client-side
   const visible = useMemo(() => {
-    if (activeQueue === "archive") return allLinks.filter(l => l.status === "done");
-    if (activeQueue === null) return allLinks.filter(l => l.status !== "done");
-    return allLinks.filter(l => l.queue === activeQueue && l.status !== "done");
-  }, [allLinks, activeQueue]);
+    let base;
+    if (activeQueue === "archive") base = allLinks.filter(l => l.status === "done");
+    else if (activeQueue === null) base = allLinks.filter(l => l.status !== "done");
+    else base = allLinks.filter(l => l.queue === activeQueue && l.status !== "done");
+
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(l =>
+      l.title?.toLowerCase().includes(q) ||
+      l.canonical_url?.toLowerCase().includes(q) ||
+      l.description?.toLowerCase().includes(q) ||
+      l.ai_summary?.toLowerCase().includes(q) ||
+      l.ai_tags?.some(t => t.toLowerCase().includes(q))
+    );
+  }, [allLinks, activeQueue, searchQuery]);
 
   // Counts per tab
   const counts = useMemo(() => ({
@@ -268,6 +289,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     try {
       const updated = await api.updateLink(id, { status: "done" });
       setAllLinks(prev => prev.map(l => l.id === id ? updated : l));
+      setActiveQueue("archive");
       showToast("Moved to Archive", "var(--archive)");
     } catch {}
   }
@@ -409,14 +431,21 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 13, color: "var(--muted)", flexWrap: "wrap" }}>
               <span>{tabSub}</span>
               <span style={{ width: 3, height: 3, borderRadius: 99, background: "var(--muted-2)" }} />
-              <span style={{ fontFamily: "monospace" }}>{visible.length} link{visible.length !== 1 ? "s" : ""}</span>
+              {searchQuery.trim() ? (
+                <span style={{ fontFamily: "monospace" }}>
+                  {visible.length} match{visible.length !== 1 ? "es" : ""}
+                  <span style={{ color: "var(--muted-2)" }}> of {counts[activeQueue ?? "all"] ?? 0}</span>
+                </span>
+              ) : (
+                <span style={{ fontFamily: "monospace" }}>{visible.length} link{visible.length !== 1 ? "s" : ""}</span>
+              )}
             </div>
           </div>
 
           {/* Grid/List toggle — hidden on mobile */}
           {!isMobile && <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden", background: "var(--surface)", flexShrink: 0 }}>
             {["grid", "list"].map(l => (
-              <button key={l} onClick={() => setLayout(l)} title={l} style={{ width: 32, height: 32, display: "grid", placeItems: "center", border: 0, cursor: "pointer", background: layout === l ? "var(--ink)" : "transparent", color: layout === l ? "var(--bg)" : "var(--muted)", transition: "background .12s, color .12s" }}>
+              <button key={l} onClick={() => setLayout(l)} title={l} style={{ width: 32, height: 32, display: "grid", placeItems: "center", border: 0, cursor: "pointer", background: layout === l ? "var(--btn-dark)" : "transparent", color: layout === l ? "var(--btn-dark-text)" : "var(--muted)", transition: "background .12s, color .12s" }}>
                 {l === "grid" ? (
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
                     <rect x="0" y="0" width="7" height="7" rx="1.5"/><rect x="9" y="0" width="7" height="7" rx="1.5"/>
@@ -441,8 +470,38 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         </div>
 
         {/* Tabs */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 12 }}>
           <QueueTabs active={activeQueue} onChange={setActiveQueue} counts={counts} />
+        </div>
+
+        {/* Search */}
+        <div style={{ marginBottom: 20, position: "relative" }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none", display: "flex" }}>
+            <SearchIcon />
+          </span>
+          <input
+            type="text"
+            placeholder="Search by title, URL, tag, or summary…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              width: "100%", height: 40, paddingLeft: 36, paddingRight: searchQuery ? 36 : 12,
+              border: "1px solid var(--line)", borderRadius: 10,
+              background: "var(--surface)", color: "var(--ink)",
+              fontSize: 13, outline: "none", boxShadow: "var(--shadow-card)",
+              transition: "border-color .15s",
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+            onBlur={e => { e.currentTarget.style.borderColor = "var(--line)"; }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: 0, background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px", borderRadius: 4 }}
+            >
+              ×
+            </button>
+          )}
         </div>
 
         {/* Cards */}
@@ -457,7 +516,17 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
           <div className="arciv-cards-grid arciv-grid" style={{ display: "grid", gridTemplateColumns: effectiveLayout === "list" ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: effectiveLayout === "list" ? 8 : 14 }}>
             {pendingUrl && <ClassifyingCard url={pendingUrl} onComplete={handleClassifyComplete} />}
             {visible.length === 0 && !pendingUrl ? (
-              <EmptyState queue={activeQueue} />
+              searchQuery.trim() ? (
+                <div style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", gap: 12 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: "var(--surface-2)", display: "grid", placeItems: "center", fontSize: 22 }}>🔍</div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>No matches found</h3>
+                  <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", textAlign: "center", maxWidth: 280 }}>
+                    No links match <em>"{searchQuery}"</em> — try a different term.
+                  </p>
+                </div>
+              ) : (
+                <EmptyState queue={activeQueue} />
+              )
             ) : (
               visible.map(link => (
                 <LinkCard
