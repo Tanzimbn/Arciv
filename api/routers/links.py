@@ -128,6 +128,10 @@ async def update_link(
         link.status = body.status
         if body.status == "done" and link.done_at is None:
             link.done_at = datetime.now(timezone.utc)
+        elif body.status == "active":
+            link.done_at = None
+    if body.notes is not None:
+        link.notes = body.notes if body.notes.strip() else None
 
     await db.commit()
     await db.refresh(link)
