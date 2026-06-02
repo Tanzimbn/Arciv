@@ -255,6 +255,122 @@ body.layout-list .arciv-card {
   .arciv-page-head { flex-direction: column !important; align-items: flex-start !important; }
 }
 
+/* ── Link detail drawer ──────────────────────────────────── */
+.arciv-ld-root {
+  position: fixed; inset: 0; z-index: 500; pointer-events: none;
+}
+.arciv-ld-scrim {
+  position: absolute; inset: 0;
+  background: rgba(22,21,19,.28);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  opacity: 0; transition: opacity .28s ease;
+}
+.arciv-ld-panel {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(520px, 96vw);
+  background: var(--nav);
+  border-left: 1px solid var(--line);
+  box-shadow: -24px 0 60px -20px rgba(22,21,19,.28);
+  display: grid; grid-template-rows: auto 1fr auto;
+  transform: translateX(100%);
+  transition: transform .32s cubic-bezier(.22,1,.36,1);
+  will-change: transform;
+}
+.arciv-ld-root.open { pointer-events: auto; }
+.arciv-ld-root.open .arciv-ld-scrim  { opacity: 1; }
+.arciv-ld-root.open .arciv-ld-panel  { transform: none; }
+
+/* Scrollable body */
+.arciv-ld-body { overflow-y: auto; display: flex; flex-direction: column; gap: 0; }
+
+/* Section dividers */
+.arciv-ld-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line-2);
+}
+.arciv-ld-section:last-child { border-bottom: none; }
+
+/* Section label */
+.arciv-ld-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+}
+
+/* Tag chips */
+.arciv-ld-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 500;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.arciv-ld-tag button {
+  display: grid; place-items: center; width: 14px; height: 14px;
+  border: 0; background: transparent; cursor: pointer; color: var(--muted);
+  padding: 0; font-size: 13px; line-height: 1; border-radius: 99px;
+}
+.arciv-ld-tag button:hover { background: var(--surface); color: var(--ink); }
+
+/* Tag input */
+.arciv-ld-tag-input {
+  border: none; outline: none; background: transparent; color: var(--ink);
+  font: inherit; font-size: 12px; min-width: 80px; max-width: 200px;
+}
+
+/* Notes textarea */
+.arciv-ld-notes {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font: inherit; font-size: 13px; line-height: 1.6;
+  color: var(--ink); background: var(--surface-2); resize: none;
+  outline: none; box-sizing: border-box; min-height: 100px;
+  transition: border-color .15s, background .15s;
+}
+.arciv-ld-notes:focus {
+  border-color: var(--accent); background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+/* Select controls */
+.arciv-ld-select {
+  appearance: none; width: 100%; height: 36px; padding: 0 32px 0 12px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface-2) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='rgba(0,0,0,.45)' d='M0 0h10L5 6z'/></svg>") no-repeat right 11px center;
+  color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; outline: none;
+  transition: border-color .15s;
+}
+.arciv-ld-select:focus { border-color: var(--accent); }
+body.dark .arciv-ld-select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='rgba(245,243,238,.45)' d='M0 0h10L5 6z'/></svg>");
+}
+
+/* Meta row */
+.arciv-ld-meta-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 12px; color: var(--muted); padding: 5px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.arciv-ld-meta-row:last-child { border-bottom: none; padding-bottom: 0; }
+.arciv-ld-meta-row strong { color: var(--ink-2); font-weight: 500; }
+
+/* Action button */
+.arciv-ld-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 38px; padding: 0 16px; border: 0; border-radius: 10px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background .15s, transform .08s;
+}
+.arciv-ld-action:active { transform: translateY(1px); }
+.arciv-ld-action.primary { background: var(--btn-dark); color: var(--btn-dark-text); }
+.arciv-ld-action.primary:hover { background: var(--btn-dark-hover); }
+.arciv-ld-action.danger  { background: var(--bad-tint); color: var(--bad); }
+.arciv-ld-action.danger:hover  { background: var(--bad); color: #fff; }
+.arciv-ld-action.ghost   { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+.arciv-ld-action.ghost:hover  { background: var(--surface); }
+
+@media (prefers-reduced-motion: reduce) {
+  .arciv-ld-panel  { transition: none; }
+  .arciv-ld-scrim  { transition: none; }
+}
+
 /* ── Notification drawer ─────────────────────────────────── */
 .arciv-drawer-root {
   position: fixed; inset: 0; z-index: 500;

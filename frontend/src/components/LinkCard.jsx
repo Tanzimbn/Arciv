@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+  </svg>
+);
+
 const QUEUE_META = {
   "watch-later": { label: "Watch Later", color: "var(--watch)", tint: "var(--watch-tint)" },
   "read-later":  { label: "Read Later",  color: "var(--read)",  tint: "var(--read-tint)"  },
@@ -22,8 +28,7 @@ function FaviconOrLetter({ url, favColor, letter, size = 14 }) {
   );
 }
 
-export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRetryAI }) {
-  const [expanded, setExpanded] = useState(false);
+export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRetryAI, onOpen }) {
   const [hovered, setHovered] = useState(false);
   const { isMobile } = useBreakpoint();
 
@@ -49,10 +54,12 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
       return (
         <article
           className="arciv-card"
+          onClick={onOpen ? () => onOpen(link) : undefined}
           style={{
             background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12,
             boxShadow: "var(--shadow-card)", display: "flex", alignItems: "center",
             gap: 10, padding: "10px 12px", opacity: isArchive ? 0.75 : 1,
+            cursor: onOpen ? "pointer" : "default",
           }}
         >
           {/* Favicon / letter avatar */}
@@ -66,12 +73,9 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
           </div>
 
           {/* Title */}
-          <a
-            href={link.url} target="_blank" rel="noopener noreferrer"
-            style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--ink)", lineHeight: 1.3, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-          >
+          <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--ink)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {link.title || link.url}
-          </a>
+          </span>
 
           {/* Status dot */}
           {isPending && (
@@ -86,12 +90,12 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
 
           {/* Delete */}
           <button
-            onClick={() => onDelete(link.id)} title="Delete"
+            onClick={e => { e.stopPropagation(); onDelete(link.id); }} title="Delete"
             style={{ width: 30, height: 30, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 6, color: "var(--muted)", cursor: "pointer", flexShrink: 0 }}
             onTouchStart={e => { e.currentTarget.style.background = "var(--read-tint)"; e.currentTarget.style.color = "var(--read)"; }}
             onTouchEnd={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}
           >
-            ✕
+            <TrashIcon />
           </button>
         </article>
       );
@@ -103,12 +107,14 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         className="arciv-card"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onClick={onOpen ? () => onOpen(link) : undefined}
         style={{
           background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12,
           boxShadow: hovered ? "0 4px 16px rgba(0,0,0,.08)" : "var(--shadow-card)",
           display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
           transition: "box-shadow .15s", opacity: isArchive ? 0.75 : 1,
           minWidth: 0, overflow: "hidden",
+          cursor: onOpen ? "pointer" : "default",
         }}
       >
         {/* Domain pill */}
@@ -124,14 +130,9 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         </div>
 
         {/* Title */}
-        <a
-          href={link.url} target="_blank" rel="noopener noreferrer"
-          style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--ink)", lineHeight: 1.3, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-          onMouseEnter={e => e.currentTarget.style.color = meta.color}
-          onMouseLeave={e => e.currentTarget.style.color = "var(--ink)"}
-        >
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--ink)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {link.title || link.url}
-        </a>
+        </span>
 
         {/* AI classifying dot */}
         {isPending && (
@@ -182,14 +183,14 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         {hovered && (
           <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
             {isFailed && (
-              <button onClick={() => onRetryAI(link.id)} style={{ fontSize: 10.5, padding: "3px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface-2)", color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={e => { e.stopPropagation(); onRetryAI(link.id); }} style={{ fontSize: 10.5, padding: "3px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface-2)", color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}>
                 ↺ Retry AI
               </button>
             )}
             {!isArchive && (
-              <button onClick={() => onDone(link.id)} title="Mark done" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "var(--try-tint)", borderRadius: 6, color: "var(--try)", cursor: "pointer" }}>✓</button>
+              <button onClick={e => { e.stopPropagation(); onDone(link.id); }} title="Mark done" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "var(--try-tint)", borderRadius: 6, color: "var(--try)", cursor: "pointer" }}>✓</button>
             )}
-            <button onClick={() => onDelete(link.id)} title="Delete" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "var(--read-tint)", borderRadius: 6, color: "var(--read)", cursor: "pointer" }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); onDelete(link.id); }} title="Delete" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "var(--read-tint)", borderRadius: 6, color: "var(--read)", cursor: "pointer" }}><TrashIcon /></button>
           </div>
         )}
       </article>
@@ -200,21 +201,21 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
   const GridActions = (
     <div style={{ display: "flex", alignItems: "center", gap: 2, opacity: hovered ? 1 : 0, transition: "opacity .15s", flexShrink: 0 }}>
       {isFailed && (
-        <button onClick={() => onRetryAI(link.id)} style={{ fontSize: 10.5, padding: "3px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface-2)", color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={e => { e.stopPropagation(); onRetryAI(link.id); }} style={{ fontSize: 10.5, padding: "3px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--surface-2)", color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}>
           ↺ Retry AI
         </button>
       )}
       {!isArchive && (
-        <button onClick={() => onDone(link.id)} title="Mark done" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 6, color: "var(--muted)", cursor: "pointer" }}
+        <button onClick={e => { e.stopPropagation(); onDone(link.id); }} title="Mark done" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 6, color: "var(--muted)", cursor: "pointer" }}
           onMouseEnter={e => { e.currentTarget.style.background = "var(--try-tint)"; e.currentTarget.style.color = "var(--try)"; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
           ✓
         </button>
       )}
-      <button onClick={() => onDelete(link.id)} title="Delete" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 6, color: "var(--muted)", cursor: "pointer" }}
+      <button onClick={e => { e.stopPropagation(); onDelete(link.id); }} title="Delete" style={{ width: 26, height: 26, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 6, color: "var(--muted)", cursor: "pointer" }}
         onMouseEnter={e => { e.currentTarget.style.background = "var(--read-tint)"; e.currentTarget.style.color = "var(--read)"; }}
         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
-        ✕
+        <TrashIcon />
       </button>
     </div>
   );
@@ -224,6 +225,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
       className="arciv-card"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onOpen ? () => onOpen(link) : undefined}
       style={{
         background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16,
         boxShadow: hovered ? "0 4px 16px rgba(0,0,0,.08)" : "var(--shadow-card)",
@@ -231,6 +233,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         transition: "box-shadow .15s, transform .15s",
         transform: hovered ? "translateY(-1px)" : "none",
         opacity: isArchive ? 0.75 : 1,
+        cursor: onOpen ? "pointer" : "default",
       }}
     >
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
@@ -258,28 +261,18 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         </div>
 
         {/* Title */}
-        <a
-          href={link.url} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", lineHeight: 1.35, letterSpacing: "-0.01em", textDecoration: "none", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-          onMouseEnter={e => e.currentTarget.style.color = meta.color}
-          onMouseLeave={e => e.currentTarget.style.color = "var(--ink)"}
-        >
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", lineHeight: 1.35, letterSpacing: "-0.01em", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {link.title || link.url}
-        </a>
+        </span>
 
         {/* Summary */}
         {summary && (
           <p
-            onClick={() => setExpanded(v => !v)}
             style={{
-              fontSize: 12, color: "var(--muted)", lineHeight: 1.5, margin: 0, cursor: "pointer",
-              display: expanded ? "block" : "-webkit-box",
-              WebkitLineClamp: expanded ? undefined : 2,
-              WebkitBoxOrient: expanded ? undefined : "vertical",
-              overflow: expanded ? "visible" : "hidden",
+              fontSize: 12, color: "var(--muted)", lineHeight: 1.5, margin: 0,
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
               fontStyle: link.ai_summary ? "italic" : "normal",
             }}
-            title={expanded ? "Click to collapse" : "Click to read more"}
           >
             {isFailed
               ? "AI processing failed — link saved without classification."

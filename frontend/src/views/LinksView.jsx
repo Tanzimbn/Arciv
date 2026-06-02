@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client.js";
 import LinkCard from "../components/LinkCard.jsx";
+import LinkDetailDrawer from "../components/LinkDetailDrawer.jsx";
 import NotificationBell from "../components/NotificationBell.jsx";
 import QueueTabs from "../components/QueueTabs.jsx";
 import UrlInputBar from "../components/UrlInputBar.jsx";
@@ -167,6 +168,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [toast, setToast] = useState(null);
   const [dark, setDark] = useState(() => localStorage.getItem("arciv_dark") === "1");
   const [layout, setLayout] = useState(() => localStorage.getItem("arciv_layout") || "grid");
+  const [selectedLink, setSelectedLink] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [username, setUsername] = useState(null);
 
@@ -311,6 +313,24 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       await api.deleteLink(id);
       setAllLinks(prev => prev.filter(l => l.id !== id));
     } catch {}
+  }
+
+  function handleLinkUpdate(updated) {
+    setAllLinks(prev => prev.map(l => l.id === updated.id ? updated : l));
+    setSelectedLink(updated);
+  }
+
+  function handleLinkDelete(id) {
+    setAllLinks(prev => prev.filter(l => l.id !== id));
+    setSelectedLink(null);
+  }
+
+  async function handleLinkRetryAI(id) {
+    try {
+      const updated = await api.retryAI(id);
+      setAllLinks(prev => prev.map(l => l.id === id ? updated : l));
+      return updated;
+    } catch { return null; }
   }
 
   const { isMobile } = useBreakpoint();
@@ -542,6 +562,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
                   onDone={handleDone}
                   onDelete={id => setDeleteConfirm(id)}
                   onRetryAI={handleRetryAI}
+                  onOpen={setSelectedLink}
                 />
               ))
             )}
@@ -572,6 +593,14 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         </div>
       )}
 
+      {/* Link detail drawer */}
+      <LinkDetailDrawer
+        link={selectedLink}
+        onClose={() => setSelectedLink(null)}
+        onUpdate={handleLinkUpdate}
+        onDelete={handleLinkDelete}
+        onRetryAI={handleLinkRetryAI}
+      />
     </div>
   );
 }

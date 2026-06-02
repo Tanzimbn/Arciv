@@ -51,6 +51,7 @@ class Link(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")
     fetch_status: Mapped[str] = mapped_column(String(20), default="ok")
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
