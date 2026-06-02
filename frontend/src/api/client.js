@@ -18,7 +18,13 @@ async function request(method, path, body) {
   if (res.status === 204) return null;
 
   const data = await res.json();
-  if (!res.ok) throw { status: res.status, data };
+  if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem("arciv_token");
+      window.location.reload();
+    }
+    throw { status: res.status, data };
+  }
   return data;
 }
 
@@ -44,6 +50,8 @@ export const api = {
 
   retryAI: (id) => request("POST", `/links/${id}/retry-ai`),
 
+  getMe: () => request("GET", "/auth/me"),
+
   getSettings: () => request("GET", "/settings"),
   updateSettings: (patch) => request("PATCH", "/settings", patch),
   testAI: () => request("POST", "/settings/ai/test"),
@@ -57,6 +65,7 @@ export const api = {
 
   getNotifications: () => request("GET", "/notifications"),
   getUnreadCount: () => request("GET", "/notifications/unread-count"),
+  readNotification: (id) => request("POST", `/notifications/${id}/read`),
   readAllNotifications: () => request("POST", "/notifications/read-all"),
 
   generateTelegramToken: () => request("POST", "/telegram/link-token"),

@@ -168,6 +168,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [dark, setDark] = useState(() => localStorage.getItem("arciv_dark") === "1");
   const [layout, setLayout] = useState(() => localStorage.getItem("arciv_layout") || "grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [username, setUsername] = useState(null);
 
   // apply body classes
   useEffect(() => {
@@ -182,14 +183,17 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     localStorage.setItem("arciv_layout", layout);
   }, [layout]);
 
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [active, archived] = await Promise.all([
+      const [active, archived, me] = await Promise.all([
         api.getLinks({ limit: 500 }),
         api.getLinks({ queue: "archive", limit: 500 }),
+        api.getMe(),
       ]);
       setAllLinks([...active, ...archived]);
+      if (me?.username) setUsername(me.username);
     } catch {
       // token may be expired
     } finally {
@@ -313,7 +317,9 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const effectiveLayout = isMobile ? "grid" : layout;
   const tabTitle = TAB_LABELS[activeQueue ?? "all"] || "All";
   const tabSub = TAB_SUBTITLES[activeQueue ?? "all"];
-  const initials = "AR";
+  const initials = username
+    ? username.split("_").slice(0, 2).map(w => w[0].toUpperCase()).join("")
+    : "AR";
 
   const ArcivMark = (
     <div style={{
@@ -388,7 +394,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
             </NavIconBtn>
             <div style={{ width: 1, height: 18, background: "var(--line)", margin: "0 3px", flexShrink: 0 }} />
             <button
-              title="Account"
+              title={username ?? "Account"}
               style={{
                 width: 34, height: 34, borderRadius: 99, border: 0, padding: 0,
                 cursor: "default",
@@ -565,6 +571,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

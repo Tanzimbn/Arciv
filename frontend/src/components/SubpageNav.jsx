@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "../api/client.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 const ArcivMark = () => (
@@ -31,12 +32,21 @@ export default function SubpageNav({ onBack }) {
   const [dark, setDark] = useState(() => localStorage.getItem("arciv_dark") === "1");
   const [backHovered, setBackHovered] = useState(false);
   const [themeHovered, setThemeHovered] = useState(false);
+  const [username, setUsername] = useState(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     document.body.classList.toggle("dark", dark);
     localStorage.setItem("arciv_dark", dark ? "1" : "0");
   }, [dark]);
+
+  useEffect(() => {
+    api.getMe().then(me => { if (me?.username) setUsername(me.username); }).catch(() => {});
+  }, []);
+
+  const initials = username
+    ? username.split("_").slice(0, 2).map(w => w[0].toUpperCase()).join("")
+    : "AR";
 
   return (
     <div style={{ position: "sticky", top: isMobile ? 8 : 12, zIndex: 30, padding: isMobile ? "0 10px" : "0 16px" }}>
@@ -104,6 +114,20 @@ export default function SubpageNav({ onBack }) {
       >
         {dark ? <SunIcon /> : <MoonIcon />}
       </button>
+
+      {/* Avatar */}
+      <div
+        title={username ?? "Account"}
+        style={{
+          width: 32, height: 32, borderRadius: 99, flexShrink: 0,
+          background: "radial-gradient(120% 100% at 30% 25%, rgba(255,255,255,.4), transparent 55%), linear-gradient(135deg, var(--accent), #b58dff)",
+          display: "grid", placeItems: "center", color: "#fff",
+          fontSize: 11, fontWeight: 600,
+          boxShadow: "0 0 0 2px var(--nav), 0 0 0 3px var(--line)",
+        }}
+      >
+        {initials}
+      </div>
     </header>
     </div>
   );

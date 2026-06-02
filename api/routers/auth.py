@@ -7,6 +7,7 @@ from api.middleware.auth import create_access_token, get_current_user
 from api.models.user import User
 from api.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from api.utils.security import hash_password, verify_password
+from api.utils.username import generate_username
 
 router = APIRouter()
 
@@ -20,7 +21,16 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
             detail="Email already registered",
         )
 
-    user = User(email=body.email, password_hash=hash_password(body.password))
+    # Generate unique username, retry up to 5 times on collision
+    username = None
+    for _ in range(5):
+        candidate = generate_username()
+        existing = await db.execute(select(User).where(User.username == candidate))
+        if not existing.scalar_one_or_none():
+            username = candidate
+            break
+
+    user = User(email=body.email, password_hash=hash_password(body.password), username=username)
     db.add(user)
     await db.commit()
     await db.refresh(user)

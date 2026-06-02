@@ -255,6 +255,112 @@ body.layout-list .arciv-card {
   .arciv-page-head { flex-direction: column !important; align-items: flex-start !important; }
 }
 
+/* ── Notification drawer ─────────────────────────────────── */
+.arciv-drawer-root {
+  position: fixed; inset: 0; z-index: 500;
+  pointer-events: none;
+}
+.arciv-drawer-scrim {
+  position: absolute; inset: 0;
+  background: rgba(22,21,19,.28);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  opacity: 0; transition: opacity .28s ease;
+}
+.arciv-drawer {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(440px, 92vw);
+  background: var(--nav);
+  border-left: 1px solid var(--line);
+  box-shadow: -24px 0 60px -20px rgba(22,21,19,.28);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .32s cubic-bezier(.22,1,.36,1);
+  will-change: transform;
+}
+.arciv-drawer-root.open { pointer-events: auto; }
+.arciv-drawer-root.open .arciv-drawer-scrim { opacity: 1; }
+.arciv-drawer-root.open .arciv-drawer { transform: none; }
+
+.arciv-drawer-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 22px 22px 0; flex-shrink: 0;
+}
+.arciv-drawer-kind {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 16px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset;
+}
+.arciv-drawer-head-txt { flex: 1; min-width: 0; }
+.arciv-drawer-eyebrow {
+  font-family: ui-monospace, monospace; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+}
+.arciv-drawer-head-txt h2 {
+  margin: 3px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--ink); line-height: 1.25;
+}
+.arciv-drawer-x {
+  width: 32px; height: 32px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 0; background: var(--surface-2); border-radius: 8px;
+  cursor: pointer; color: var(--ink-2);
+  transition: background .15s, color .15s; font-size: 16px;
+}
+.arciv-drawer-x:hover { background: var(--surface); color: var(--ink); }
+
+.arciv-drawer-sub {
+  margin: 12px 22px 0; font-size: 13px; color: var(--muted); line-height: 1.5; flex-shrink: 0;
+}
+.arciv-drawer-list-h {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 22px 22px 8px; flex-shrink: 0;
+}
+.arciv-drawer-list-h span {
+  font-family: ui-monospace, monospace; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--muted-2);
+}
+.arciv-drawer-list {
+  flex: 1; overflow-y: auto; padding: 0 14px 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.arciv-drawer-link {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 10px; border-radius: 11px; cursor: pointer;
+  text-decoration: none; transition: background .15s;
+}
+.arciv-drawer-link:hover { background: var(--surface); }
+.arciv-drawer-fav {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center; color: #fff;
+  font-size: 12px; font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22,21,19,.15);
+}
+.arciv-drawer-link-txt { flex: 1; min-width: 0; }
+.arciv-drawer-link-title {
+  font-size: 13.5px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em;
+  line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.arciv-drawer-link-meta {
+  display: flex; align-items: center; gap: 7px; margin-top: 2px;
+  font-size: 11.5px; color: var(--muted);
+}
+.arciv-drawer-link-meta-dot {
+  width: 2px; height: 2px; border-radius: 50%; background: var(--muted-2); flex-shrink: 0;
+}
+.arciv-drawer-link-ext {
+  color: var(--muted-2); flex-shrink: 0; opacity: 0; transition: opacity .15s;
+}
+.arciv-drawer-link:hover .arciv-drawer-link-ext { opacity: 1; }
+
+.arciv-drawer-empty {
+  padding: 40px 22px; text-align: center; color: var(--muted); font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arciv-drawer { transition: none; }
+  .arciv-drawer-scrim { transition: none; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

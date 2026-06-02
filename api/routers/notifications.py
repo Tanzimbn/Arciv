@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +40,25 @@ async def unread_count(
     )
     count = len(result.scalars().all())
     return UnreadCountResponse(count=count)
+
+
+@router.post("/{notification_id}/read", status_code=204)
+async def read_one(
+    notification_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.is_read = True
+    await db.commit()
 
 
 @router.post("/read-all", status_code=204)

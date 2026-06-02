@@ -13,6 +13,7 @@ const PROVIDERS = [
 
 /* ── Icons ────────────────────────────────────────────────── */
 const I = {
+  user:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
   key:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>,
   bell:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
   bot:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 11V7"/><circle cx="12" cy="5" r="2"/><path d="M8 15h.01M16 15h.01"/></svg>,
@@ -138,6 +139,12 @@ export default function SettingsView({ onBack }) {
   const [apiKey, setApiKey] = useState("");
   const [notifyTelegram, setNotifyTelegram] = useState(false);
   const [notifyInApp, setNotifyInApp] = useState(true);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [savedUsername, setSavedUsername] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameError, setUsernameError] = useState("");
+  const [usernameSuccess, setUsernameSuccess] = useState("");
+  const [usernameFocused, setUsernameFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -154,6 +161,8 @@ export default function SettingsView({ onBack }) {
       setProvider(s.ai_provider || "gemini");
       setNotifyTelegram(s.feed_notify_telegram);
       setNotifyInApp(s.feed_notify_inapp);
+      setUsernameInput(s.username ?? "");
+      setSavedUsername(s.username ?? "");
     });
   }, []);
 
@@ -179,6 +188,23 @@ export default function SettingsView({ onBack }) {
   async function handleClearKey() {
     try { setSettings(await api.updateSettings({ ai_api_key: "" })); }
     catch { setError("Failed to clear key."); }
+  }
+
+  async function handleSaveUsername() {
+    const val = usernameInput.trim();
+    if (!/^[a-z][a-z0-9_]{1,28}[a-z0-9]$/.test(val) || val.includes("__")) {
+      setUsernameError("Use 3–30 chars: lowercase letters, numbers, underscores. Must start and end with a letter or number.");
+      return;
+    }
+    setUsernameSaving(true); setUsernameError(""); setUsernameSuccess("");
+    try {
+      await api.updateSettings({ username: val });
+      setSavedUsername(val);
+      setUsernameSuccess("Username saved.");
+      setTimeout(() => setUsernameSuccess(""), 3000);
+    } catch (err) {
+      setUsernameError(err?.data?.detail === "Username already taken." ? "Username already taken." : "Failed to save username.");
+    } finally { setUsernameSaving(false); }
   }
 
   async function handleGenerateTelegramToken() {
@@ -221,6 +247,42 @@ export default function SettingsView({ onBack }) {
           </div>
         ) : (
           <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Profile */}
+            <Section icon={<I.user />} title="Profile">
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <FieldLabel>Username</FieldLabel>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <Field
+                      value={usernameInput}
+                      onChange={e => { setUsernameInput(e.target.value.toLowerCase()); setUsernameError(""); setUsernameSuccess(""); }}
+                      placeholder="your_username"
+                      focused={usernameFocused}
+                      onFocus={() => setUsernameFocused(true)}
+                      onBlur={() => setUsernameFocused(false)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveUsername}
+                    disabled={usernameSaving || usernameInput.trim() === savedUsername}
+                    style={{
+                      padding: "0 18px", border: 0, borderRadius: 10, fontSize: 13, fontWeight: 600,
+                      cursor: (usernameSaving || usernameInput.trim() === savedUsername) ? "default" : "pointer",
+                      background: (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--surface-2)" : "var(--btn-dark)",
+                      color: (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--muted)" : "var(--btn-dark-text)",
+                      transition: "background .15s, color .15s", whiteSpace: "nowrap", flexShrink: 0,
+                    }}
+                  >
+                    {usernameSaving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: usernameError ? "var(--bad)" : usernameSuccess ? "var(--good)" : "var(--muted)", lineHeight: 1.5 }}>
+                  {usernameError || usernameSuccess || `${savedUsername || "—"} · a–z 0–9 _ · 3–30 chars`}
+                </div>
+              </div>
+            </Section>
 
             {/* AI Classification */}
             <Section icon={<I.zap />} title="AI Classification">

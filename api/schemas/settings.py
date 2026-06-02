@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class SettingsResponse(BaseModel):
+    username: str | None
     ai_provider: str
     ai_api_key_masked: str | None
     feed_notify_telegram: bool
@@ -12,6 +13,7 @@ class SettingsResponse(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
+    username: str | None = None
     ai_provider: str | None = None
     ai_api_key: str | None = None
     feed_notify_telegram: bool | None = None

@@ -22,6 +22,7 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
+    username: str | None
     ai_provider: str
     feed_notify_telegram: bool
     feed_notify_inapp: bool
