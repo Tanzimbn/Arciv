@@ -127,3 +127,38 @@ async def fetch_metadata(url: str) -> dict:
         result["favicon_url"] = f"{base}/favicon.ico"
 
     return result
+
+
+async def fetch_article_text(url: str, max_chars: int = 6000) -> str:
+    """Fetch readable article text for AI processing. Returns empty string on failure."""
+    try:
+        _assert_safe_url(url)
+    except ValueError:
+        return ""
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=12.0) as client:
+            resp = await client.get(url, headers=HEADERS)
+            resp.raise_for_status()
+    except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+        return ""
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Remove noise elements
+    for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "iframe"]):
+        tag.decompose()
+
+    # Prefer semantic article containers
+    body = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(id=lambda i: i and "content" in i.lower())
+        or soup.find(class_=lambda c: c and "content" in " ".join(c).lower())
+        or soup.body
+    )
+    if body is None:
+        return ""
+
+    text = " ".join(body.get_text(separator=" ").split())
+    return text[:max_chars]

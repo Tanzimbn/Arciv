@@ -37,3 +37,22 @@ class GroqProvider(AIProvider):
             if isinstance(e, ParseError):
                 raise
             raise
+
+    async def generate(self, system: str, user_message: str) -> str:
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.3,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            msg = str(e)
+            if "401" in msg or "invalid_api_key" in msg.lower():
+                raise AuthError(msg) from e
+            if "429" in msg or "rate_limit" in msg.lower():
+                raise QuotaError(msg) from e
+            raise

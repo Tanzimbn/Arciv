@@ -10,8 +10,17 @@ from api.middleware.auth import get_current_user
 from api.models.link import Link
 from api.models.user import User
 from api.schemas.link import LinkCreate, LinkResponse, LinkUpdate
+from agent.prompt import (
+    INSIGHTS_SYSTEM,
+    ParseError,
+    build_insights_message,
+    parse_insights_response,
+)
+from agent.registry import make_provider
+from api.config import settings
+from api.utils.encryption import decrypt_value
 from api.utils.heuristics import classify_by_url
-from api.utils.metadata import canonicalize_url, fetch_metadata
+from api.utils.metadata import canonicalize_url, fetch_article_text, fetch_metadata
 
 router = APIRouter()
 
@@ -180,4 +189,61 @@ async def retry_ai(
     if arq_pool is not None:
         await arq_pool.enqueue_job("classify_link", str(link.id))
 
+    return link
+
+
+@router.post("/{link_id}/insights", response_model=LinkResponse)
+async def generate_insights(
+    link_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Link).where(Link.id == link_id, Link.user_id == current_user.id)
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    # Resolve AI provider — user key first, then shared Gemini
+    provider = None
+    if current_user.ai_api_key_enc:
+        try:
+            api_key = decrypt_value(current_user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+            provider = make_provider(current_user.ai_provider, api_key)
+        except Exception:
+            pass
+    if provider is None and settings.SHARED_GEMINI_KEY:
+        provider = make_provider("gemini", settings.SHARED_GEMINI_KEY)
+    if provider is None:
+        raise HTTPException(
+            status_code=422,
+            detail="No AI provider configured. Add an API key in Settings to use this feature.",
+        )
+
+    # Fetch full article body for richer insights (fallback to stored description)
+    content = await fetch_article_text(link.canonical_url)
+    if not content and link.description:
+        content = link.description
+
+    user_msg = build_insights_message(
+        title=link.title or "",
+        content=content,
+        url=link.canonical_url,
+    )
+
+    try:
+        raw = await provider.generate(INSIGHTS_SYSTEM, user_msg)
+        insights = parse_insights_response(raw)
+    except ParseError as e:
+        raise HTTPException(status_code=502, detail=f"AI returned unexpected format: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI provider error: {e}")
+
+    if not insights:
+        raise HTTPException(status_code=502, detail="AI returned no insights. Try again.")
+
+    link.ai_insights = insights
+    await db.commit()
+    await db.refresh(link)
     return link

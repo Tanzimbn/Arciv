@@ -49,6 +49,7 @@ export const api = {
   deleteLink: (id) => request("DELETE", `/links/${id}`),
 
   retryAI: (id) => request("POST", `/links/${id}/retry-ai`),
+  generateInsights: (id) => request("POST", `/links/${id}/insights`),
 
   getMe: () => request("GET", "/auth/me"),
 
