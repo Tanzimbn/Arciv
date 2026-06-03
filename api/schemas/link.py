@@ -87,6 +87,7 @@ class LinkResponse(BaseModel):
     status: str
     fetch_status: str
     notes: str | None
+    ai_insights: list[str] | None
     saved_at: datetime
     done_at: datetime | None
 

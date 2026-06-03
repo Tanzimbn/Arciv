@@ -266,7 +266,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         </span>
 
         {/* Summary */}
-        {summary && (
+        {(summary || link.fetch_status === "unreachable") && (
           <p
             style={{
               fontSize: 12, color: "var(--muted)", lineHeight: 1.5, margin: 0,
@@ -276,9 +276,9 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
           >
             {isFailed
               ? "AI processing failed — link saved without classification."
-              : link.fetch_status === "unreachable"
-              ? "Could not fetch this URL — saved but may be broken."
-              : summary}
+              : summary
+              ? summary
+              : "Could not fetch this URL — saved but may be broken."}
           </p>
         )}
 

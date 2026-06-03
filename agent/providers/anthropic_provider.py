@@ -36,3 +36,20 @@ class AnthropicProvider(AIProvider):
             if isinstance(e, ParseError):
                 raise
             raise
+
+    async def generate(self, system: str, user_message: str) -> str:
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=1024,
+                system=system,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            return response.content[0].text
+        except Exception as e:
+            msg = str(e)
+            if "401" in msg or "authentication" in msg.lower():
+                raise AuthError(msg) from e
+            if "429" in msg or "rate_limit" in msg.lower() or "overloaded" in msg.lower():
+                raise QuotaError(msg) from e
+            raise
