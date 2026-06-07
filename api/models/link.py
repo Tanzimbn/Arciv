@@ -34,6 +34,7 @@ class Link(Base):
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     favicon_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # AI fields
     content_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

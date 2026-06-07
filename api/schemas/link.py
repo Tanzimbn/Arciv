@@ -79,6 +79,7 @@ class LinkResponse(BaseModel):
     title: str | None
     description: str | None
     favicon_url: str | None
+    published_date: datetime | None
     content_type: str | None
     queue: str
     ai_summary: str | None

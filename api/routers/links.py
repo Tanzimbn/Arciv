@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -56,6 +56,19 @@ async def create_link(
             },
         )
 
+    arq_pool = getattr(request.app.state, "arq_pool", None)
+    if arq_pool is not None:
+        hour_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        rate_key = f"rate:links:{current_user.id}:{hour_key}"
+        count = await arq_pool.incr(rate_key)
+        if count == 1:
+            await arq_pool.expire(rate_key, 3600)
+        if count > 30:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded: 30 links per hour.",
+            )
+
     meta = await fetch_metadata(canonical)
     content_type, queue = classify_by_url(canonical)
 
@@ -70,6 +83,7 @@ async def create_link(
         title=meta["title"],
         description=meta["description"],
         favicon_url=meta["favicon_url"],
+        published_date=meta.get("published_date"),
         fetch_status=meta["fetch_status"],
         content_type=content_type,
         queue=queue,
@@ -79,9 +93,14 @@ async def create_link(
     await db.commit()
     await db.refresh(link)
 
-    arq_pool = getattr(request.app.state, "arq_pool", None)
     if arq_pool is not None:
-        await arq_pool.enqueue_job("classify_link", str(link.id))
+        if link.fetch_status == "unreachable":
+            await arq_pool.enqueue_job(
+                "retry_unreachable_fetch", str(link.id),
+                _defer_by=timedelta(minutes=5),
+            )
+        else:
+            await arq_pool.enqueue_job("classify_link", str(link.id))
 
     return link
 
