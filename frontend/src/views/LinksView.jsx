@@ -124,24 +124,7 @@ function ClassifyingCard({ url, onComplete }) {
   );
 }
 
-function StatCard({ label, value, suffix, delta, color, icon }) {
-  return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", boxShadow: "var(--shadow-card)", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{label}</span>
-        <div style={{ width: 30, height: 30, borderRadius: 9, background: `color-mix(in oklab, ${color} 14%, transparent)`, color, display: "grid", placeItems: "center", fontSize: 13 }}>{icon}</div>
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.03em", color: "var(--ink)", lineHeight: 1 }}>
-        {value}{suffix && <em style={{ fontSize: 14, color: "var(--muted)", fontWeight: 500, fontStyle: "normal", marginLeft: 3 }}>{suffix}</em>}
-      </div>
-      {delta !== undefined && (
-        <div style={{ fontSize: 11.5, fontFamily: "monospace", color: "var(--try)" }}>
-          {delta} <span style={{ color: "var(--muted)" }}>vs. last week</span>
-        </div>
-      )}
-    </div>
-  );
-}
+const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 function EmptyState({ queue }) {
   return (
@@ -248,6 +231,39 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     };
   }, [allLinks, counts]);
 
+  const weekActivity = useMemo(() => {
+    const now = new Date();
+    const todayDow = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(now.getDate() - todayDow);
+    return Array.from({ length: 7 }, (_, i) => {
+      if (i > todayDow) return 0;
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
+      const dayStr = day.toISOString().slice(0, 10);
+      return allLinks.filter(l => l.saved_at?.slice(0, 10) === dayStr).length;
+    });
+  }, [allLinks]);
+
+  const lastWeekTotal = useMemo(() => {
+    const now = new Date();
+    const todayDow = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(now.getDate() - todayDow);
+    const lastMon = new Date(monday);
+    lastMon.setDate(monday.getDate() - 7);
+    const lastSun = new Date(lastMon);
+    lastSun.setDate(lastMon.getDate() + 6);
+    lastSun.setHours(23, 59, 59, 999);
+    return allLinks.filter(l => {
+      if (!l.saved_at) return false;
+      const d = new Date(l.saved_at);
+      return d >= lastMon && d <= lastSun;
+    }).length;
+  }, [allLinks]);
+
   function showToast(msg, color) {
     setToast({ msg, color });
     setTimeout(() => setToast(null), 2200);
@@ -334,6 +350,25 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   }
 
   const { isMobile } = useBreakpoint();
+
+  const _now = new Date();
+  const todayIdx = (_now.getDay() + 6) % 7;
+  const totalWeek = weekActivity.reduce((a, b) => a + b, 0);
+  const maxDay = Math.max(...weekActivity, 1);
+  const hr = _now.getHours();
+  const timeGreeting = hr < 5 ? "Still up" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
+  const dateLine = _now.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }).toUpperCase();
+  const weekNo = (() => {
+    const d = new Date(Date.UTC(_now.getFullYear(), _now.getMonth(), _now.getDate()));
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - day);
+    const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - ys) / 86400000) + 1) / 7);
+  })();
+  const inboxCount = counts.inbox || 0;
+  const archiveCount = counts.archive || 0;
+  const autoPct = stats.classified;
+
   const effectiveLayout = isMobile ? "grid" : layout;
   const tabTitle = TAB_LABELS[activeQueue ?? "all"] || "All";
   const tabSub = TAB_SUBTITLES[activeQueue ?? "all"];
@@ -448,6 +483,104 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       {/* ── Page ── */}
       <main className="arciv-page-pad" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 28px 80px" }}>
 
+        {/* Hero */}
+        <section className="arciv-hero" aria-label="Welcome">
+          <div className="arciv-hero-greet">
+            <div className="arciv-hero-eyebrow">
+              <span className={`arciv-hero-pulse${inboxCount > 0 ? " warn" : ""}`} />
+              <span>{dateLine}</span>
+              <span className="arciv-hero-sep" />
+              <span>WEEK {weekNo}</span>
+              <span className="arciv-hero-sep" />
+              <span>{allLinks.filter(l => l.status !== "done").length} LINKS · {inboxCount === 0 ? "INBOX ZERO" : `${inboxCount} TO TRIAGE`}</span>
+            </div>
+            <h1 className="arciv-hero-title">
+              {timeGreeting}, <em>{username ?? "there"}</em>.
+            </h1>
+            <p className="arciv-hero-sub">
+              {totalWeek > 0
+                ? <><b>{totalWeek}</b> save{totalWeek !== 1 ? "s" : ""} this week</>
+                : "Nothing saved yet this week"}
+              {", "}<b>{autoPct}%</b> classified by AI
+              {inboxCount === 0
+                ? <>, and an <b>empty inbox</b>.</>
+                : <> — <b>{inboxCount}</b> still to triage.</>}
+            </p>
+          </div>
+
+          <div className="arciv-hero-panel" role="img" aria-label={`${totalWeek} links saved this week`}>
+            <div className="arciv-hp-h">
+              <span className="arciv-hp-label">This week</span>
+              <span className="arciv-hp-total">{totalWeek}<em>saves</em></span>
+            </div>
+            <div>
+              <div className="arciv-hp-bars">
+                {weekActivity.map((n, i) => {
+                  const pct = Math.max((n / maxDay) * 100, n === 0 ? 4 : 10);
+                  return (
+                    <div key={i} className={`arciv-hp-col${n === 0 ? " empty" : ""}${i === todayIdx ? " today" : ""}`}>
+                      <div className="arciv-hp-bar" style={{ height: `${pct}%` }} title={`${DAY_LABELS[i]} · ${n} saved`} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="arciv-hp-days">
+                {DAY_LABELS.map((d, i) => (
+                  <span key={i} className={`arciv-hp-day${i === todayIdx ? " today" : ""}`}>{d}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Stats bar */}
+        <div className="arciv-stats-bar">
+          {[
+            { key: "saved", label: "Saved this week", num: totalWeek,
+              icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>,
+              color: "var(--accent)",
+              delta: totalWeek > lastWeekTotal ? { dir: "up", text: `+${totalWeek - lastWeekTotal} vs. last week` }
+                   : totalWeek < lastWeekTotal ? { dir: "down", text: `-${lastWeekTotal - totalWeek} vs. last week` }
+                   : { dir: "flat", text: "same as last week" } },
+            { key: "auto", label: "Auto-classified", num: autoPct, suffix: "%",
+              icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/></svg>,
+              color: "var(--try)",
+              delta: autoPct >= 90 ? { dir: "up", text: "on target" } : { dir: "flat", text: "review inbox" } },
+            { key: "done", label: "Marked done", num: archiveCount,
+              icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+              color: "var(--watch)",
+              delta: archiveCount > 0 ? { dir: "up", text: `${archiveCount} total` } : { dir: "flat", text: "nothing yet" } },
+            { key: "inbox", label: "In inbox", num: inboxCount,
+              icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>,
+              color: "var(--inbox)",
+              delta: inboxCount === 0 ? { dir: "up", text: "inbox zero" } : { dir: "down", text: `${inboxCount} to triage` } },
+          ].map(s => (
+            <div key={s.key} className="arciv-stat-item">
+              <div className="arciv-stat-head">
+                <span className="arciv-stat-label">{s.label}</span>
+                <div className="arciv-stat-ico" style={{ background: `color-mix(in oklab, ${s.color} 14%, transparent)`, color: s.color }}>
+                  {s.icon}
+                </div>
+              </div>
+              <div className="arciv-stat-num">
+                {s.num}{s.suffix && <em>{s.suffix}</em>}
+              </div>
+              <div className="arciv-stat-delta">
+                <span className={`arciv-stat-arrow ${s.delta.dir}`}>
+                  {s.delta.dir === "up" ? (
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                  ) : s.delta.dir === "down" ? (
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>
+                  ) : (
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  )}
+                </span>
+                {s.delta.text}
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* Page head */}
         <div className="arciv-page-head" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 12 }}>
           <div>
@@ -485,14 +618,6 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
               </button>
             ))}
           </div>}
-        </div>
-
-        {/* Stats strip */}
-        <div className="arciv-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
-          <StatCard label="Saved this week" value={stats.saved} icon="🔖" color="var(--accent)" />
-          <StatCard label="Auto-classified" value={stats.classified} suffix="%" icon="✦" color="var(--try)" />
-          <StatCard label="Marked done" value={stats.done} icon="✓" color="var(--watch)" />
-          <StatCard label="In inbox" value={stats.inbox} icon="📥" color="var(--inbox)" />
         </div>
 
         {/* Tabs */}

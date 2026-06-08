@@ -452,6 +452,175 @@ body.layout-list .arciv-card {
   .arciv-drawer-scrim { transition: none; }
 }
 
+/* ── Hero: greeting + weekly activity ───────────────────── */
+@keyframes arciv-hero-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--try) 50%, transparent); }
+  50%       { box-shadow: 0 0 0 5px transparent; }
+}
+@keyframes arciv-inbox-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--inbox) 50%, transparent); }
+  50%       { box-shadow: 0 0 0 5px transparent; }
+}
+@keyframes arciv-hp-bar-in {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+.arciv-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 36px;
+  align-items: end;
+  margin: 0 0 24px;
+}
+.arciv-hero-greet { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.arciv-hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 10px; width: fit-content;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted-2);
+}
+.arciv-hero-pulse {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--try);
+  animation: arciv-hero-pulse 2.4s ease-in-out infinite;
+}
+.arciv-hero-pulse.warn { background: var(--inbox); animation-name: arciv-inbox-pulse; }
+.arciv-hero-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--muted-2); opacity: .55; flex-shrink: 0; }
+.arciv-hero-title {
+  margin: 0;
+  font-family: 'Instrument Serif', serif; font-weight: 400;
+  font-size: clamp(36px, 4.4vw, 54px); line-height: 1; letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.arciv-hero-title em { font-style: italic; color: var(--accent); }
+.arciv-hero-sub {
+  margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--muted);
+  letter-spacing: -0.005em; max-width: 46ch;
+}
+.arciv-hero-sub b { font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.arciv-hero-panel {
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--surface) 80%, transparent) 0%,
+    color-mix(in oklab, var(--surface) 50%, transparent) 100%);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 18px 20px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, var(--shadow-card);
+  min-width: 0;
+}
+.arciv-hp-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.arciv-hp-label {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.arciv-hp-total {
+  font-family: 'Instrument Serif', serif; font-size: 30px; line-height: 1;
+  color: var(--ink); letter-spacing: -0.01em;
+}
+.arciv-hp-total em {
+  font-style: normal; font-family: ui-monospace, monospace;
+  font-size: 11px; color: var(--muted); margin-left: 6px;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.arciv-hp-bars { display: flex; align-items: stretch; gap: 6px; height: 68px; }
+.arciv-hp-col {
+  flex: 1; min-width: 0; position: relative; height: 100%;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--ink) 4%, transparent);
+  overflow: hidden;
+}
+body.dark .arciv-hp-col { background: color-mix(in oklab, var(--ink) 7%, transparent); }
+.arciv-hp-bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, var(--accent), color-mix(in oklab, var(--accent) 55%, var(--surface)));
+  border-radius: 4px;
+  box-shadow: 0 -1px 0 color-mix(in oklab, var(--accent) 35%, transparent) inset;
+  transform-origin: bottom;
+  animation: arciv-hp-bar-in 0.4s ease-out both;
+}
+.arciv-hp-col.empty .arciv-hp-bar { background: color-mix(in oklab, var(--ink) 14%, transparent); box-shadow: none; }
+.arciv-hp-col.today {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent),
+    0 0 16px -4px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+.arciv-hp-col.today .arciv-hp-bar { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); }
+.arciv-hp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 8px; }
+.arciv-hp-day {
+  text-align: center; font-family: ui-monospace, monospace;
+  font-size: 10px; color: var(--muted-2); letter-spacing: 0.08em; line-height: 1;
+}
+.arciv-hp-day.today { color: var(--accent); font-weight: 600; }
+
+/* ── Stats bar ───────────────────────────────────────────── */
+.arciv-stats-bar {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface) 60%, transparent);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.arciv-stat-item {
+  padding: 16px 20px; display: flex; flex-direction: column; gap: 8px;
+  border-right: 1px solid var(--line);
+  transition: background .15s;
+}
+.arciv-stat-item:last-child { border-right: 0; }
+.arciv-stat-item:hover { background: color-mix(in oklab, var(--surface) 90%, transparent); }
+.arciv-stat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.arciv-stat-label {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 500;
+}
+.arciv-stat-ico { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0; }
+.arciv-stat-num {
+  font-family: 'Instrument Serif', serif;
+  font-size: 36px; font-weight: 400; letter-spacing: -0.015em;
+  color: var(--ink); line-height: 1;
+  display: flex; align-items: baseline; gap: 4px;
+}
+.arciv-stat-num em {
+  font-style: normal; font-family: ui-monospace, monospace;
+  font-size: 11px; color: var(--muted); font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.arciv-stat-delta {
+  font-size: 11px; font-family: ui-monospace, monospace;
+  color: var(--muted); letter-spacing: 0.02em;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.arciv-stat-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 4px; font-size: 14px; flex-shrink: 0;
+}
+.arciv-stat-arrow.up   { background: color-mix(in oklab, var(--try)  14%, transparent); color: var(--try); }
+.arciv-stat-arrow.down { background: color-mix(in oklab, var(--read) 14%, transparent); color: var(--read); }
+.arciv-stat-arrow.flat { background: color-mix(in oklab, var(--ink)   8%, transparent); color: var(--muted); }
+
+@media (max-width: 880px) {
+  .arciv-hero { grid-template-columns: 1fr; gap: 24px; align-items: start; }
+  .arciv-stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arciv-stat-item { border-right: 0; border-bottom: 1px solid var(--line); }
+  .arciv-stat-item:nth-child(odd) { border-right: 1px solid var(--line); }
+  .arciv-stat-item:nth-last-child(-n+2) { border-bottom: 0; }
+}
+
+@media (max-width: 639px) {
+  /* Hide the activity chart on mobile — greeting alone is enough */
+  .arciv-hero-panel { display: none; }
+  /* Let eyebrow items wrap instead of overflowing */
+  .arciv-hero-eyebrow { flex-wrap: wrap; gap: 6px; row-gap: 4px; }
+  /* Tighten vertical rhythm */
+  .arciv-hero { margin-bottom: 16px; }
+  .arciv-hero-greet { gap: 10px; }
+  .arciv-hero-sub { font-size: 13.5px; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

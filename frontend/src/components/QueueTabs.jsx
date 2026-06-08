@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 const TABS = [
   { key: null,           label: "All",         color: "var(--muted)",   desc: "Everything you've saved" },
   { key: "watch-later", label: "Watch Later",  color: "var(--watch)",   desc: "Videos queued for when you have time" },
@@ -8,9 +10,50 @@ const TABS = [
 ];
 
 export default function QueueTabs({ active, onChange, counts = {} }) {
+  const scrollRef = useRef(null);
+  const activeRef = useRef(null);
+  const [fades, setFades] = useState({ left: false, right: false });
+
+  function updateFades() {
+    const el = scrollRef.current;
+    if (!el) return;
+    setFades({
+      left:  el.scrollLeft > 4,
+      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+    });
+  }
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateFades();
+    el.addEventListener("scroll", updateFades, { passive: true });
+    const ro = new ResizeObserver(updateFades);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateFades); ro.disconnect(); };
+  }, []);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [active]);
+
   return (
-    <div>
-      <div style={{
+    <div style={{ position: "relative" }}>
+      {fades.left && (
+        <div style={{
+          position: "absolute", left: 0, top: 0, bottom: 0, width: 48, zIndex: 2,
+          background: "linear-gradient(to right, var(--surface) 30%, transparent)",
+          borderRadius: "12px 0 0 12px", pointerEvents: "none",
+        }} />
+      )}
+      {fades.right && (
+        <div style={{
+          position: "absolute", right: 0, top: 0, bottom: 0, width: 48, zIndex: 2,
+          background: "linear-gradient(to left, var(--surface) 30%, transparent)",
+          borderRadius: "0 12px 12px 0", pointerEvents: "none",
+        }} />
+      )}
+      <div ref={scrollRef} style={{
         display: "flex", alignItems: "center", gap: 4, overflowX: "auto",
         background: "var(--surface)", border: "1px solid var(--line)",
         borderRadius: 12, padding: 4, boxShadow: "var(--shadow-card)",
@@ -22,6 +65,7 @@ export default function QueueTabs({ active, onChange, counts = {} }) {
           return (
             <button
               key={String(key)}
+              ref={isActive ? activeRef : null}
               onClick={() => onChange(key)}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
