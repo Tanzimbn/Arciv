@@ -9,9 +9,31 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    VERIFY_TOKEN_TTL_HOURS: int = 24
+    RESET_TOKEN_TTL_HOURS: int = 1
 
     ENCRYPTION_KEY: str
+
+    # Email / SMTP. When EMAIL_ENABLED is false, links are logged instead of sent
+    # (local dev without an SMTP server).
+    EMAIL_ENABLED: bool = False
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Arciv <no-reply@arciv.local>"
+    SMTP_STARTTLS: bool = True
+    # Public base URL of this deployment, used to build verification / reset
+    # links inside worker email jobs (which have no HTTP request to derive it
+    # from). Dev default below; production MUST override, e.g.
+    # APP_BASE_URL=https://arciv.example.com
+    APP_BASE_URL: str = "http://localhost:8000"
+
+    # Comma-separated browser origins allowed by CORS. APP_BASE_URL is always
+    # appended automatically, so prod usually needs nothing extra here.
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:8000"
 
     TELEGRAM_ENABLED: bool = False
     TELEGRAM_BOT_TOKEN: str = ""
@@ -21,6 +43,12 @@ class Settings(BaseSettings):
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
     ENVIRONMENT: str = "development"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        origins = {o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()}
+        origins.add(self.APP_BASE_URL.rstrip("/"))
+        return sorted(origins)
 
 
 settings = Settings()

@@ -15,6 +15,9 @@ feedparser==6.0.11
 arq==0.25.0
 python-multipart==0.0.9
 asyncpg==0.29.0
+aiosmtplib==3.0.1
+jinja2==3.1.4
+slowapi==0.1.9
 # AI providers
 google-generativeai>=0.8.0
 groq>=0.9.0
