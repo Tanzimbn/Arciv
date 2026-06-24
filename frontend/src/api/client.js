@@ -1,26 +1,77 @@
 const BASE = "/api";
 
-function getToken() {
-  return localStorage.getItem("arciv_token");
+const ACCESS_KEY = "arciv_token";
+const REFRESH_KEY = "arciv_refresh";
+
+export function getToken() {
+  return localStorage.getItem(ACCESS_KEY);
 }
 
-async function request(method, path, body) {
-  const headers = { "Content-Type": "application/json" };
-  const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_KEY);
+}
 
+export function setTokens({ access_token, refresh_token }) {
+  if (access_token) localStorage.setItem(ACCESS_KEY, access_token);
+  if (refresh_token) localStorage.setItem(REFRESH_KEY, refresh_token);
+}
+
+export function clearTokens() {
+  localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+}
+
+async function rawRequest(method, path, body, token) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  return res;
+}
+
+// Single-flight refresh so concurrent 401s don't all hit /refresh.
+let refreshing = null;
+
+async function tryRefresh() {
+  const refresh_token = getRefreshToken();
+  if (!refresh_token) return false;
+  if (!refreshing) {
+    refreshing = rawRequest("POST", "/auth/refresh", { refresh_token })
+      .then(async (res) => {
+        if (!res.ok) {
+          clearTokens();
+          return false;
+        }
+        setTokens(await res.json());
+        return true;
+      })
+      .finally(() => {
+        refreshing = null;
+      });
+  }
+  return refreshing;
+}
+
+async function request(method, path, body) {
+  let res = await rawRequest(method, path, body, getToken());
+
+  // Access token expired? Refresh once and retry.
+  if (res.status === 401 && getRefreshToken() && !path.startsWith("/auth/")) {
+    if (await tryRefresh()) {
+      res = await rawRequest(method, path, body, getToken());
+    }
+  }
 
   if (res.status === 204) return null;
-
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem("arciv_token");
+    // 401 after a refresh attempt (or on an auth route) means the session is
+    // dead — clear tokens and bounce to login.
+    if (res.status === 401 && !path.startsWith("/auth/")) {
+      clearTokens();
       window.location.reload();
     }
     throw { status: res.status, data };
@@ -34,6 +85,20 @@ export const api = {
 
   register: (email, password) =>
     request("POST", "/auth/register", { email, password }),
+
+  verifyEmail: (token) => request("POST", "/auth/verify-email", { token }),
+  resendVerification: (email) =>
+    request("POST", "/auth/resend-verification", { email }),
+  forgotPassword: (email) =>
+    request("POST", "/auth/forgot-password", { email }),
+  resetPassword: (token, new_password) =>
+    request("POST", "/auth/reset-password", { token, new_password }),
+  logout: () => {
+    const refresh_token = getRefreshToken();
+    return refresh_token
+      ? request("POST", "/auth/logout", { refresh_token }).catch(() => {})
+      : Promise.resolve();
+  },
 
   getLinks: (params = {}) => {
     const qs = new URLSearchParams(

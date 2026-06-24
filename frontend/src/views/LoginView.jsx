@@ -83,14 +83,14 @@ function StrengthMeter({ password }) {
 }
 
 // ── Field with rotating-light border ──────────────────────────
-function Field({ label, link, type = "text", icon, value, onChange, placeholder, autoComplete, toggleable, required }) {
+function Field({ label, link, linkHref = "#", type = "text", icon, value, onChange, placeholder, autoComplete, toggleable, required }) {
   const [show, setShow] = useState(false);
   const inputType = toggleable ? (show ? "text" : "password") : type;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <label style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", letterSpacing: "-0.005em" }}>{label}</label>
-        {link && <a href="#" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}
+        {link && <a href={linkHref} style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}
           onMouseEnter={e => { e.currentTarget.style.textDecoration = "underline"; e.currentTarget.style.color = "var(--accent-deep)"; }}
           onMouseLeave={e => { e.currentTarget.style.textDecoration = "none"; e.currentTarget.style.color = "var(--accent)"; }}
         >{link}</a>}
@@ -285,6 +285,8 @@ export default function LoginView({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [needsVerify, setNeedsVerify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [arrowHovered, setArrowHovered] = useState(false);
   const { width } = useBreakpoint();
@@ -296,22 +298,47 @@ export default function LoginView({ onLogin }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setNotice("");
+    setNeedsVerify(false);
     setLoading(true);
     try {
-      const data = isSignup
-        ? await api.register(email, password)
-        : await api.login(email, password);
-      onLogin(data.access_token);
+      if (isSignup) {
+        const data = await api.register(email, password);
+        // Block-until-verified: no token yet — prompt the user to check email.
+        setNotice(data.message || "Check your email to verify your account before signing in.");
+      } else {
+        const data = await api.login(email, password);
+        onLogin(data); // { access_token, refresh_token, ... }
+      }
     } catch (err) {
-      setError(err.data?.detail || "Something went wrong.");
+      if (err.status === 403) {
+        setNeedsVerify(true);
+        setError(err.data?.detail || "Email not verified.");
+      } else {
+        setError(err.data?.detail || "Something went wrong.");
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError("");
+    setNotice("");
+    try {
+      const data = await api.resendVerification(email);
+      setNotice(data.message || "Verification email sent.");
+      setNeedsVerify(false);
+    } catch {
+      setError("Could not resend right now. Try again later.");
     }
   }
 
   function switchMode() {
     setMode(isSignup ? "login" : "register");
     setError("");
+    setNotice("");
+    setNeedsVerify(false);
     setPassword("");
   }
 
@@ -440,6 +467,7 @@ export default function LoginView({ onLogin }) {
             <Field
               label="Password"
               link={!isSignup ? "Forgot?" : null}
+              linkHref="/forgot-password"
               icon={<LockIcon />}
               value={password}
               onChange={setPassword}
@@ -456,6 +484,21 @@ export default function LoginView({ onLogin }) {
             {error && (
               <div style={{ background: "var(--read-tint)", border: "1px solid color-mix(in oklab, var(--read) 30%, transparent)", borderRadius: 10, padding: "9px 13px" }}>
                 <p style={{ fontSize: 12.5, color: "var(--read)", margin: 0 }}>{error}</p>
+                {needsVerify && (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    style={{ marginTop: 6, border: 0, background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--accent)", textDecoration: "underline" }}
+                  >
+                    Resend verification email
+                  </button>
+                )}
+              </div>
+            )}
+
+            {notice && (
+              <div style={{ background: "color-mix(in oklab, var(--accent) 8%, transparent)", border: "1px solid color-mix(in oklab, var(--accent) 30%, transparent)", borderRadius: 10, padding: "9px 13px" }}>
+                <p style={{ fontSize: 12.5, color: "var(--accent-deep, var(--accent))", margin: 0 }}>{notice}</p>
               </div>
             )}
 

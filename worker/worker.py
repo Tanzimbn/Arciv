@@ -3,6 +3,7 @@ from arq.connections import RedisSettings
 
 from api.config import settings
 from worker.ai_classify import classify_link, sweep_failed_links
+from worker.email import send_email_job
 from worker.feed_poll import poll_all_feeds, poll_single_feed
 from worker.fetch_retry import retry_unreachable_fetch
 
@@ -10,7 +11,7 @@ _parts = settings.FEED_POLL_CRON.split()
 _poll_minute = int(_parts[0]) if _parts[0] != "*" else 0
 _poll_hour = int(_parts[1]) if _parts[1] != "*" else 8
 
-_functions = [classify_link, sweep_failed_links, poll_single_feed, poll_all_feeds, retry_unreachable_fetch]
+_functions = [classify_link, sweep_failed_links, poll_single_feed, poll_all_feeds, retry_unreachable_fetch, send_email_job]
 _cron_jobs = [
     cron(sweep_failed_links, hour=set(range(24)), minute=0),
     cron(poll_all_feeds, hour={_poll_hour}, minute=_poll_minute),

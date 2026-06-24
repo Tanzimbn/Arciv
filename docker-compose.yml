@@ -27,6 +27,14 @@ services:
       timeout: 5s
       retries: 5
 
+  # Local dev SMTP catcher — view sent emails at http://localhost:8025.
+  # In .env set: EMAIL_ENABLED=true, SMTP_HOST=mailhog, SMTP_PORT=1025, SMTP_STARTTLS=false
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   api:
     build: .
     env_file: .env
