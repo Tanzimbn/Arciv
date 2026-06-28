@@ -21,6 +21,22 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+// Flatten FastAPI's error shape into a readable string. `detail` is a plain
+// string for HTTPExceptions, but an array of {loc,msg} for 422 validation
+// errors (e.g. password strength) — surface the message instead of "[object]".
+export function errMessage(err, fallback = "Something went wrong.") {
+  const detail = err?.data?.detail;
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (d?.msg || "").replace(/^Value error,\s*/, ""))
+      .filter(Boolean)
+      .join(". ") || fallback;
+  }
+  return fallback;
+}
+
 async function rawRequest(method, path, body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -135,4 +151,7 @@ export const api = {
   readAllNotifications: () => request("POST", "/notifications/read-all"),
 
   generateTelegramToken: () => request("POST", "/telegram/link-token"),
+
+  adminListUsers: () => request("GET", "/admin/users"),
+  adminDeleteUser: (id) => request("DELETE", `/admin/users/${id}`),
 };

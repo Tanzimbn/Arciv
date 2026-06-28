@@ -15,7 +15,7 @@ from api.database import AsyncSessionLocal
 from api.utils.ratelimit import limiter
 from api.routers import auth, links
 from api.routers import settings as settings_router
-from api.routers import feeds, notifications
+from api.routers import feeds, notifications, admin
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -46,6 +46,7 @@ app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram

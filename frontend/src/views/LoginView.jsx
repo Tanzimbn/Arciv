@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api/client.js";
+import { api, errMessage } from "../api/client.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 // ── Icons ──────────────────────────────────────────────────────
@@ -60,6 +60,14 @@ function strengthOf(pw) {
 const STRENGTH_LABELS = ["—", "Weak", "Okay", "Good", "Strong"];
 const STRENGTH_COLORS = [null, "#d04a2a", "#e08800", "var(--try)", "var(--try)"];
 
+// Required rules — must mirror api/utils/security.validate_password_strength.
+const PASSWORD_RULES = [
+  { label: "8+ characters", test: (p) => p.length >= 8 },
+  { label: "uppercase", test: (p) => /[A-Z]/.test(p) },
+  { label: "lowercase", test: (p) => /[a-z]/.test(p) },
+  { label: "number", test: (p) => /[0-9]/.test(p) },
+];
+
 function StrengthMeter({ password }) {
   const s = strengthOf(password);
   const color = STRENGTH_COLORS[s];
@@ -77,6 +85,21 @@ function StrengthMeter({ password }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
         <span>Password strength</span>
         <b style={{ fontWeight: 500, color: s > 0 ? color : "var(--ink-2)" }}>{STRENGTH_LABELS[s]}</b>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 2 }}>
+        {PASSWORD_RULES.map(({ label, test }) => {
+          const ok = test(password);
+          return (
+            <span key={label} style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              fontSize: 11, color: ok ? "var(--try)" : "var(--muted)",
+              transition: "color .2s",
+            }}>
+              <span style={{ fontSize: 11, lineHeight: 1 }}>{ok ? "✓" : "○"}</span>
+              {label}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -293,7 +316,15 @@ export default function LoginView({ onLogin }) {
 
   const isSignup = mode === "register";
   const isNarrow = width < 960;
-  const canSubmit = email.trim().includes("@") && password.length >= (isSignup ? 8 : 1);
+  // Mirror the backend rule (api/utils/security.validate_password_strength) so the
+  // signup button doesn't submit passwords the API will 422 on.
+  const strongPassword =
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password);
+  const canSubmit =
+    email.trim().includes("@") && (isSignup ? strongPassword : password.length >= 1);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -313,9 +344,9 @@ export default function LoginView({ onLogin }) {
     } catch (err) {
       if (err.status === 403) {
         setNeedsVerify(true);
-        setError(err.data?.detail || "Email not verified.");
+        setError(errMessage(err, "Email not verified."));
       } else {
-        setError(err.data?.detail || "Something went wrong.");
+        setError(errMessage(err));
       }
     } finally {
       setLoading(false);

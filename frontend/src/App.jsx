@@ -7,6 +7,7 @@ import SettingsView from "./views/SettingsView.jsx";
 import VerifyEmailView from "./views/VerifyEmailView.jsx";
 import ForgotPasswordView from "./views/ForgotPasswordView.jsx";
 import ResetPasswordView from "./views/ResetPasswordView.jsx";
+import AdminView from "./views/AdminView.jsx";
 
 function goHome() {
   // Drop token query params / auth paths and return to the SPA root.
@@ -37,6 +38,7 @@ export default function App() {
   }
 
   if (!token) return <LoginView onLogin={handleLogin} />;
+  if (path === "/admin") return <AdminView onBack={goHome} />;
   if (view === "settings") return <SettingsView onBack={() => setView("links")} />;
   if (view === "feeds") return <FeedsView onBack={() => setView("links")} />;
   return (

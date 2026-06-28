@@ -1,0 +1,78 @@
+# Render Blueprint — Arciv production deploy.
+#
+# State lives off-Render: Postgres on Neon, Redis on Upstash. Render only runs
+# compute. This default uses ONE web service that runs the API, the ARQ worker,
+# and `alembic upgrade head` together (bin/start.sh) — fits Render's free Web
+# Service tier alongside free Neon + Upstash.
+#
+# Secrets are NOT in this file: every `sync: false` var must be set in the
+# Render dashboard (Service → Environment) or in an Environment Group.
+#
+# Connect: Render → New → Blueprint → pick this repo → branch `dev`.
+# Pushes to `dev` then auto-deploy (autoDeploy: true).
+
+services:
+  - type: web
+    name: arciv
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: dev
+    autoDeploy: true
+    plan: free                       # bump to starter for always-on (free sleeps)
+    healthCheckPath: /health
+    dockerCommand: /app/bin/start.sh # API + worker + migrations in one container
+    envVars:
+      - key: DATABASE_URL            # Neon — direct endpoint, keep ?sslmode=require
+        sync: false
+      - key: REDIS_URL               # Upstash — rediss://default:<pw>@<host>.upstash.io:6379
+        sync: false
+      - key: SECRET_KEY              # JWT signing
+        generateValue: true
+      - key: ENCRYPTION_KEY          # Fernet key — MUST be a real Fernet key (see README/steps)
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_BASE_URL            # this service's public URL (email links)
+        value: https://arciv.onrender.com
+      - key: CORS_ORIGINS            # same-origin SPA, so usually just the app URL
+        value: https://arciv.onrender.com
+      - key: EMAIL_ENABLED
+        value: "true"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_STARTTLS
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD           # Gmail App Password
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: SHARED_GEMINI_KEY       # optional shared AI key (else users supply their own)
+        sync: false
+      - key: TELEGRAM_ENABLED
+        value: "false"
+
+# ── Scale-up option (paid) ────────────────────────────────────────────────
+# When traffic grows, split the worker out so a slow API request can't starve
+# AI jobs (and vice versa). Set the web service's dockerCommand back to just
+# uvicorn (the Dockerfile default) and add:
+#
+#   - type: worker
+#     name: arciv-worker
+#     runtime: docker
+#     dockerfilePath: ./Dockerfile
+#     dockerContext: .
+#     branch: dev
+#     autoDeploy: true
+#     dockerCommand: python -m arq worker.worker.WorkerSettings
+#     envVars: [ same DATABASE_URL / REDIS_URL / SMTP_* / SHARED_GEMINI_KEY ]
+#
+# With a separate worker, move `alembic upgrade head` to the web service's
+# preDeployCommand so migrations still run before traffic shifts. An
+# Environment Group is the cleanest way to share the secret set across both.

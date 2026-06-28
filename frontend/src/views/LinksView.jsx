@@ -188,6 +188,36 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Silent refresh (no loading spinner) — used to poll for background AI results.
+  const refreshSilently = useCallback(async () => {
+    try {
+      const [active, archived] = await Promise.all([
+        api.getLinks({ limit: 500 }),
+        api.getLinks({ queue: "archive", limit: 500 }),
+      ]);
+      setAllLinks([...active, ...archived]);
+    } catch {
+      // ignore — transient; next tick retries
+    }
+  }, []);
+
+  // While any link is still being classified, poll so the card flips from
+  // "AI is classifying" to its real queue/summary without a manual reload.
+  const hasPending = useMemo(
+    () => allLinks.some(l => l.ai_status === "pending" || l.ai_status === "processing"),
+    [allLinks]
+  );
+  useEffect(() => {
+    if (!hasPending) return;
+    let ticks = 0;
+    const id = setInterval(() => {
+      ticks += 1;
+      refreshSilently();
+      if (ticks >= 45) clearInterval(id); // ~3 min cap (e.g. shared-key daily cap leaves it pending)
+    }, 4000);
+    return () => clearInterval(id);
+  }, [hasPending, refreshSilently]);
+
   // Filter links client-side
   const visible = useMemo(() => {
     let base;
@@ -232,6 +262,12 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   }, [allLinks, counts]);
 
   const weekActivity = useMemo(() => {
+    // Local calendar date (saved_at is UTC; Date() converts to local). Using
+    // toISOString here would shift the day by the tz offset and miss saves.
+    const localDay = (d) => {
+      const x = new Date(d);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    };
     const now = new Date();
     const todayDow = (now.getDay() + 6) % 7;
     const monday = new Date(now);
@@ -241,8 +277,8 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       if (i > todayDow) return 0;
       const day = new Date(monday);
       day.setDate(monday.getDate() + i);
-      const dayStr = day.toISOString().slice(0, 10);
-      return allLinks.filter(l => l.saved_at?.slice(0, 10) === dayStr).length;
+      const dayStr = localDay(day);
+      return allLinks.filter(l => l.saved_at && localDay(l.saved_at) === dayStr).length;
     });
   }, [allLinks]);
 
