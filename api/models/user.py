@@ -34,3 +34,9 @@ class User(Base):
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def is_admin(self) -> bool:
+        from api.config import settings
+
+        return settings.is_admin(self.email)

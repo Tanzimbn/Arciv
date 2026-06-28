@@ -44,11 +44,21 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
 
+    # Comma-separated emails granted admin access (user management). Empty = no admins.
+    ADMIN_EMAILS: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         origins = {o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()}
         origins.add(self.APP_BASE_URL.rstrip("/"))
         return sorted(origins)
+
+    @property
+    def admin_emails_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()}
+
+    def is_admin(self, email: str) -> bool:
+        return email.lower() in self.admin_emails_set
 
 
 settings = Settings()

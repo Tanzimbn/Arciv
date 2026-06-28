@@ -67,6 +67,7 @@ class UserResponse(BaseModel):
     email: str
     username: str | None
     email_verified: bool
+    is_admin: bool
     ai_provider: str
     feed_notify_telegram: bool
     feed_notify_inapp: bool
