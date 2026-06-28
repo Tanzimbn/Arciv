@@ -23,4 +23,4 @@ trap "kill -TERM $WORKER_PID 2>/dev/null; wait $WORKER_PID" TERM INT
 
 # Run uvicorn in the foreground as PID 1 so Render's health checks
 # and shutdown signals reach it directly.
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000
+exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}"

@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlsplit, urlunsplit
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -59,6 +61,27 @@ class Settings(BaseSettings):
 
     def is_admin(self, email: str) -> bool:
         return email.lower() in self.admin_emails_set
+
+    @property
+    def async_database_url(self) -> str:
+        """asyncpg connection URL. Strips libpq-only query params
+        (``sslmode``, ``channel_binding``) that managed Postgres providers like
+        Neon append by default — asyncpg can't parse them and raises on connect.
+        TLS is instead enabled via ``db_connect_args``."""
+        raw = self.DATABASE_URL
+        for prefix in ("postgresql+asyncpg://", "postgres://", "postgresql://"):
+            if raw.startswith(prefix):
+                raw = "postgresql://" + raw[len(prefix):]
+                break
+        parts = urlsplit(raw)
+        return urlunsplit(("postgresql+asyncpg", parts.netloc, parts.path, "", ""))
+
+    @property
+    def db_connect_args(self) -> dict:
+        """TLS for managed Postgres (Neon) without breaking local docker
+        Postgres. Decided by the raw URL's ``sslmode``."""
+        sslmode = parse_qs(urlsplit(self.DATABASE_URL).query).get("sslmode", [""])[0].lower()
+        return {"ssl": True} if sslmode not in ("", "disable", "allow") else {}
 
 
 settings = Settings()

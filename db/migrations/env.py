@@ -14,11 +14,7 @@ fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
 
-db_url = settings.DATABASE_URL.replace(
-    "postgresql://", "postgresql+asyncpg://", 1
-).replace(
-    "postgres://", "postgresql+asyncpg://", 1
-)
+db_url = settings.async_database_url
 
 
 def run_migrations_offline() -> None:
@@ -39,7 +35,7 @@ def do_run_migrations(connection):
 
 
 async def run_migrations_online() -> None:
-    connectable = create_async_engine(db_url)
+    connectable = create_async_engine(db_url, connect_args=settings.db_connect_args)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()

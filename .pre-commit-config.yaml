@@ -1,0 +1,15 @@
+# Secret-scanning + basic hygiene before every commit.
+# Setup (once per clone):  pip install pre-commit && pre-commit install
+# Run on whole repo:        pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks            # blocks commits containing secrets/keys
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key  # SSH/PEM private keys
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
