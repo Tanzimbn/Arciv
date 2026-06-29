@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "Arciv <no-reply@arciv.local>"
     SMTP_STARTTLS: bool = True
+    # Gmail API (HTTPS) backend. Use this when the host blocks outbound SMTP
+    # ports (e.g. Render's free/starter tier blocks 25/465/587). When
+    # GMAIL_REFRESH_TOKEN is set, email is sent via the Gmail REST API over
+    # port 443 instead of SMTP — from the authenticated Gmail account. The
+    # From display name still comes from SMTP_FROM.
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REFRESH_TOKEN: str = ""
     # Public base URL of this deployment, used to build verification / reset
     # links inside worker email jobs (which have no HTTP request to derive it
     # from). Dev default below; production MUST override, e.g.

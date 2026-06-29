@@ -49,7 +49,16 @@ services:
         sync: false
       - key: SMTP_PASSWORD           # Gmail App Password
         sync: false
-      - key: SMTP_FROM
+      - key: SMTP_FROM               # set to your Gmail address, e.g. Arciv <you@gmail.com>
+        sync: false
+      # Render free/starter BLOCKS outbound SMTP (587), so smtp.gmail.com times
+      # out. Use the Gmail API (HTTPS/443) instead — set these three and mail
+      # sends from your Gmail account. Leave blank to fall back to SMTP.
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
         sync: false
       - key: ADMIN_EMAILS
         sync: false
