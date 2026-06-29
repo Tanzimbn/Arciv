@@ -27,7 +27,19 @@ async def lifespan(app: FastAPI):
     await app.state.arq_pool.aclose()
 
 
-app = FastAPI(title="Arciv API", version="0.1.0", lifespan=lifespan)
+# Expose interactive docs (/docs, /redoc, /openapi.json) only outside
+# production. In production they leak the full API surface (routes, schemas,
+# admin endpoints) as free recon, so disable them.
+_docs_enabled = settings.ENVIRONMENT.lower() != "production"
+
+app = FastAPI(
+    title="Arciv API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
