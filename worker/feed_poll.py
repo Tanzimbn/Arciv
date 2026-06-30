@@ -11,7 +11,7 @@ from api.utils.feed_discovery import entry_guid, parse_feed_content
 
 DEGRADED_THRESHOLD = 7
 DEAD_THRESHOLD = 30
-MAX_NOTIFICATION_ITEMS = 10
+MAX_NOTIFICATION_ITEMS = 50
 
 
 async def poll_single_feed(ctx, feed_id: str) -> None:
@@ -59,11 +59,13 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
                 body_lines = [f"• {item['title']}\n  {item['url']}" for item in shown]
                 if len(new_items) > MAX_NOTIFICATION_ITEMS:
                     body_lines.append(f"\n... and {len(new_items) - MAX_NOTIFICATION_ITEMS} more")
+                site = feed.site_url or feed.feed_url
+                body = f"source: {site}\n\n" + "\n\n".join(body_lines)
                 notif = Notification(
                     user_id=feed.user_id,
                     type="new_feed_items",
                     title=f"{source} has {len(new_items)} new post{'s' if len(new_items) > 1 else ''}",
-                    body="\n\n".join(body_lines),
+                    body=body,
                 )
                 db.add(notif)
 

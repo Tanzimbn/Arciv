@@ -1,0 +1,232 @@
+/* ── Arciv auth pages (forgot / reset) — scoped under .auth-page ──────────
+   Tokens (--accent, --try, --ink…) come from the global design system in
+   index.css; this file only adds the two-pane recovery layout. */
+
+@property --auth-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+@keyframes auth-spin { to { --auth-angle: 360deg } }
+@keyframes auth-fade-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  background: var(--bg);
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+@media (max-width: 960px) {
+  .auth-page { grid-template-columns: 1fr }
+  .auth-page .left { display: none }
+}
+
+/* ── Left brand pane ───────────────────────────────────────── */
+.auth-page .left {
+  position: relative; overflow: hidden;
+  padding: 36px 44px;
+  background:
+    radial-gradient(60% 50% at 18% 22%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 60%),
+    radial-gradient(70% 60% at 95% 90%, color-mix(in oklab, #ff6b3d 12%, transparent), transparent 65%),
+    linear-gradient(180deg, var(--nav), var(--bg));
+  display: flex; flex-direction: column; justify-content: space-between;
+  border-right: 1px solid var(--line);
+}
+.auth-page .left::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(transparent 95%, rgba(31,28,21,.04) 95%) 0 0/24px 24px,
+    linear-gradient(90deg, transparent 95%, rgba(31,28,21,.04) 95%) 0 0/24px 24px;
+  mask: radial-gradient(120% 80% at 50% 40%, #000 0%, transparent 75%);
+  -webkit-mask: radial-gradient(120% 80% at 50% 40%, #000 0%, transparent 75%);
+  opacity: .7;
+}
+.auth-page .left > * { position: relative; z-index: 1 }
+
+.auth-page .brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; cursor: pointer; text-decoration: none }
+.auth-page .brand-mark {
+  width: 38px; height: 38px; border-radius: 11px;
+  background:
+    radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.4), transparent 55%),
+    linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 65%, #1a0c4a));
+  display: grid; place-items: center;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.6) inset,
+    0 -3px 8px rgba(0,0,0,.2) inset,
+    0 6px 18px -3px color-mix(in oklab, var(--accent) 60%, transparent),
+    0 1px 2px rgba(0,0,0,.08);
+}
+.auth-page .brand-name { font-weight: 600; font-size: 19px; letter-spacing: -0.025em }
+.auth-page .brand-name em { font-style: normal; color: var(--accent) }
+
+.auth-page .hero { max-width: 520px; margin-top: 8vh }
+.auth-page .hero h1 {
+  font-family: 'Instrument Serif', serif; font-weight: 400;
+  font-size: clamp(40px, 5.4vw, 64px); line-height: 1.02; letter-spacing: -0.015em;
+  margin: 0; color: var(--ink);
+}
+.auth-page .hero h1 em { font-style: italic; color: var(--accent) }
+.auth-page .hero p { margin: 22px 0 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); max-width: 440px }
+
+.auth-page .stack { margin-top: 42px; position: relative; height: 260px; width: 100%; max-width: 520px }
+.auth-page .float-card {
+  position: absolute;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 13px 14px 12px;
+  box-shadow: var(--shadow-card), 0 14px 40px -16px rgba(22,21,19,.25);
+  display: flex; flex-direction: column; gap: 8px;
+  width: 280px; backdrop-filter: blur(2px);
+}
+.auth-page .float-card .top {
+  display: flex; align-items: center; gap: 8px;
+  font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.auth-page .float-card .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 18%, transparent) }
+.auth-page .float-card .title { font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.35 }
+.auth-page .float-card .meta { font-size: 11.5px; color: var(--muted); display: flex; gap: 8px; align-items: center }
+.auth-page .float-card .meta .sep { width: 2px; height: 2px; border-radius: 50%; background: var(--muted-2) }
+.auth-page .fc-1 { top: 0; left: 0; transform: rotate(-3deg) }
+.auth-page .fc-2 { top: 30px; left: 200px; transform: rotate(2.5deg); z-index: 2 }
+.auth-page .fc-3 { top: 130px; left: 60px; transform: rotate(-1.5deg); z-index: 1 }
+.auth-page .float-card.fc-2 {
+  background: linear-gradient(180deg, var(--accent-tint), var(--surface));
+  border-color: color-mix(in oklab, var(--accent) 20%, var(--line));
+}
+
+.auth-page .left-foot { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-family: ui-monospace, 'SF Mono', monospace }
+.auth-page .left-foot .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--try); box-shadow: 0 0 0 3px color-mix(in oklab, var(--try) 18%, transparent) }
+
+/* ── Right form pane ───────────────────────────────────────── */
+.auth-page .right { padding: 36px 44px; display: flex; flex-direction: column; background: var(--bg) }
+.auth-page .right-top { display: flex; justify-content: flex-end; align-items: center; gap: 12px }
+.auth-page .switch-hint { font-size: 13px; color: var(--muted) }
+.auth-page .switch-btn {
+  font: inherit; font-size: 13px; font-weight: 500;
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 7px 13px; border-radius: 9px; cursor: pointer; color: var(--ink);
+  transition: background .15s, border-color .15s, transform .08s;
+  box-shadow: var(--shadow-card);
+}
+.auth-page .switch-btn:hover { background: var(--surface-2); border-color: rgba(31,28,21,.18) }
+.auth-page .switch-btn:active { transform: translateY(1px) }
+
+.auth-page .form-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 0 }
+.auth-page .form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 22px; animation: auth-fade-in .35s ease both }
+
+.auth-page .back-link {
+  display: inline-flex; align-items: center; gap: 7px; width: fit-content;
+  font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer;
+  background: none; border: 0; padding: 0;
+  text-decoration: none; transition: color .15s, gap .15s;
+}
+.auth-page .back-link:hover { color: var(--ink); gap: 9px }
+
+.auth-page .step-badge {
+  display: inline-flex; align-items: center; gap: 9px; width: fit-content;
+  padding: 5px 11px 5px 8px; border-radius: 999px;
+  background: var(--accent-tint); border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+  font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent-deep);
+}
+.auth-page .step-badge .ico { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(22,21,19,.08) }
+
+.auth-page .form-head h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 38px; line-height: 1.05; letter-spacing: -0.015em; margin: 0 }
+.auth-page .form-head p { margin: 10px 0 0; font-size: 14px; color: var(--muted); line-height: 1.55 }
+.auth-page .form-head p b { color: var(--ink-2); font-weight: 600 }
+
+.auth-page .field { display: flex; flex-direction: column; gap: 7px }
+.auth-page .field-label { font-size: 12px; font-weight: 500; color: var(--ink-2); letter-spacing: -0.005em }
+
+.auth-page .lit-wrap { position: relative; border-radius: 12px; isolation: isolate }
+.auth-page .lit-wrap::before {
+  content: ""; position: absolute; inset: -1.5px; border-radius: inherit;
+  background: conic-gradient(from var(--auth-angle), transparent 0deg, color-mix(in oklab, var(--accent) 85%, #fff) 22deg, transparent 70deg, transparent 180deg, color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg, transparent 248deg, transparent 360deg);
+  animation: auth-spin 5s linear infinite; z-index: -2; opacity: .35;
+  transition: opacity .25s, inset .2s, filter .25s;
+}
+.auth-page .lit-wrap::after {
+  content: ""; position: absolute; inset: -1.5px; border-radius: inherit; z-index: -3; filter: blur(14px); opacity: 0; transition: opacity .25s;
+  background: conic-gradient(from var(--auth-angle), transparent 0deg, color-mix(in oklab, var(--accent) 85%, #fff) 22deg, transparent 70deg, transparent 180deg, color-mix(in oklab, var(--accent) 55%, #ff6b3d) 200deg, transparent 248deg, transparent 360deg);
+  animation: auth-spin 5s linear infinite;
+}
+.auth-page .lit-wrap:hover::before { opacity: .7 }
+.auth-page .lit-wrap:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%) }
+.auth-page .lit-wrap:focus-within::after { opacity: .55 }
+
+.auth-page .input {
+  display: flex; align-items: center; gap: 10px;
+  height: 46px; padding: 0 14px; border-radius: 11px; background: var(--surface);
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 1px 2px rgba(22,21,19,.04);
+  transition: background .15s;
+}
+.auth-page .lit-wrap:focus-within .input { background: var(--nav) }
+.auth-page .input > svg { color: var(--muted-2); flex-shrink: 0; transition: color .2s }
+.auth-page .lit-wrap:focus-within .input > svg { color: var(--accent) }
+.auth-page .input input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14.5px; color: var(--ink); padding: 0; letter-spacing: -0.005em }
+.auth-page .input input::placeholder { color: var(--muted-2) }
+.auth-page .input .eye { border: 0; background: transparent; cursor: pointer; color: var(--muted); width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; transition: background .15s, color .15s }
+.auth-page .input .eye:hover { background: var(--surface-2); color: var(--ink-2) }
+
+.auth-page .reqs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin-top: 2px }
+.auth-page .req { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); letter-spacing: -0.005em; transition: color .2s }
+.auth-page .req .tick { width: 17px; height: 17px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--surface); border: 1.5px solid var(--line); color: transparent; transition: background .2s, border-color .2s, color .2s, transform .2s }
+.auth-page .req.met { color: var(--ink-2) }
+.auth-page .req.met .tick { background: var(--try); border-color: var(--try); color: #fff; transform: scale(1.04) }
+
+.auth-page .strength { display: flex; flex-direction: column; gap: 6px; margin-top: 2px }
+.auth-page .strength-bars { display: flex; gap: 4px }
+.auth-page .strength-bars span { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .25s }
+.auth-page .strength-label { font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center }
+.auth-page .strength-label b { font-weight: 500; color: var(--ink-2) }
+.auth-page .strength[data-s="1"] .strength-bars span:nth-child(-n+1) { background: #d04a2a }
+.auth-page .strength[data-s="2"] .strength-bars span:nth-child(-n+2) { background: #e08800 }
+.auth-page .strength[data-s="3"] .strength-bars span:nth-child(-n+3) { background: var(--try) }
+.auth-page .strength[data-s="4"] .strength-bars span { background: var(--try) }
+.auth-page .strength[data-s="1"] .strength-label b { color: #d04a2a }
+.auth-page .strength[data-s="2"] .strength-label b { color: #e08800 }
+.auth-page .strength[data-s="3"] .strength-label b,
+.auth-page .strength[data-s="4"] .strength-label b { color: var(--try) }
+
+.auth-page .submit {
+  height: 48px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 500; font-size: 14.5px; letter-spacing: -0.005em;
+  background: var(--btn-dark, #1f1c15); color: var(--btn-dark-text, #fff);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .08s, background .15s, box-shadow .15s; text-decoration: none;
+  box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 4px 14px -3px rgba(22,21,19,.3), 0 1px 2px rgba(22,21,19,.1);
+}
+.auth-page .submit:hover { background: var(--btn-dark-hover, #000) }
+.auth-page .submit:active { transform: translateY(1px) }
+.auth-page .submit:disabled { background: var(--muted-2); color: #fff; box-shadow: none; cursor: not-allowed }
+.auth-page .submit .arrow { transition: transform .2s }
+.auth-page .submit:hover:not(:disabled) .arrow { transform: translateX(2px) }
+
+.auth-page .alt-line { font-size: 13px; color: var(--muted); text-align: center }
+.auth-page .alt-line a, .auth-page .alt-line button { color: var(--accent); text-decoration: none; font-weight: 500; background: none; border: 0; font: inherit; cursor: pointer }
+.auth-page .alt-line a:hover, .auth-page .alt-line button:hover { color: var(--accent-deep); text-decoration: underline }
+
+.auth-page .err-line { font-size: 13px; color: var(--bad, #cc3a3a); text-align: left; margin: -6px 0 0 }
+
+.auth-page .sent-icon {
+  width: 60px; height: 60px; border-radius: 16px; margin: 0 auto; display: grid; place-items: center; color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-tint), var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+  box-shadow: var(--shadow-card), 0 10px 28px -12px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+.auth-page .sent-head { text-align: center }
+.auth-page .sent-head h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 34px; line-height: 1.08; letter-spacing: -0.015em; margin: 18px 0 0 }
+.auth-page .sent-head p { margin: 10px 0 0; font-size: 14px; color: var(--muted); line-height: 1.6 }
+.auth-page .sent-head p b { color: var(--ink); font-weight: 600 }
+.auth-page .resend { font-family: ui-monospace, 'SF Mono', monospace; font-size: 11px; letter-spacing: 0.04em; text-align: center; color: var(--muted) }
+.auth-page .resend a, .auth-page .resend button { color: var(--accent); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer }
+.auth-page .resend a:hover, .auth-page .resend button:hover { text-decoration: underline }
+
+.auth-page .done-icon {
+  width: 60px; height: 60px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--try) 88%, #fff), var(--try));
+  box-shadow: 0 10px 28px -12px color-mix(in oklab, var(--try) 60%, transparent), 0 1px 2px rgba(22,21,19,.1);
+}
+
+.auth-page .right-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 18px; font-size: 12px; color: var(--muted); font-family: ui-monospace, 'SF Mono', monospace; letter-spacing: 0.04em }
+.auth-page .right-foot .links { display: flex; gap: 14px }
+.auth-page .right-foot a { color: var(--muted); text-decoration: none }
+.auth-page .right-foot a:hover { color: var(--ink-2) }

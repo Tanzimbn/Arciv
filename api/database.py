@@ -3,14 +3,15 @@ from sqlalchemy.orm import DeclarativeBase
 
 from api.config import settings
 
-# Convert postgresql:// to postgresql+asyncpg://
-db_url = settings.DATABASE_URL.replace(
-    "postgresql://", "postgresql+asyncpg://", 1
-).replace(
-    "postgres://", "postgresql+asyncpg://", 1
+# async_database_url normalizes the scheme to asyncpg and strips libpq-only
+# params; db_connect_args carries TLS for managed Postgres (Neon). pool_pre_ping
+# transparently reconnects when Neon suspends idle connections.
+engine = create_async_engine(
+    settings.async_database_url,
+    echo=settings.ENVIRONMENT == "development",
+    connect_args=settings.db_connect_args,
+    pool_pre_ping=True,
 )
-
-engine = create_async_engine(db_url, echo=settings.ENVIRONMENT == "development")
 
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False

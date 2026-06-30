@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.registry import VALID_PROVIDERS, make_provider
@@ -8,6 +10,7 @@ from api.middleware.auth import get_current_user
 from api.models.user import User
 from api.schemas.settings import AITestResult, SettingsResponse, SettingsUpdate
 from api.utils.encryption import decrypt_value, encrypt_value, mask_api_key
+from api.utils.username import validate_username
 
 router = APIRouter()
 
@@ -21,6 +24,7 @@ def _build_response(user: User) -> SettingsResponse:
         except Exception:
             masked = "****"
     return SettingsResponse(
+        username=user.username,
         ai_provider=user.ai_provider,
         ai_api_key_masked=masked,
         feed_notify_telegram=user.feed_notify_telegram,
@@ -40,6 +44,18 @@ async def update_settings(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if body.username is not None:
+        if not validate_username(body.username):
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid username. Use 3-30 chars: lowercase letters, numbers, underscores only.",
+            )
+        current_user.username = body.username
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="Username already taken.")
     if body.ai_provider is not None:
         if body.ai_provider not in VALID_PROVIDERS:
             raise HTTPException(status_code=400, detail=f"Invalid provider. Must be one of: {sorted(VALID_PROVIDERS)}")

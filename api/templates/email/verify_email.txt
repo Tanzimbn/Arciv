@@ -1,0 +1,7 @@
+Confirm your email
+
+Welcome to Arciv! Confirm your email address to activate your account:
+
+{{ verify_url }}
+
+This link expires in {{ ttl_hours }} hours. If you didn't sign up, ignore this email.

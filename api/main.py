@@ -5,14 +5,17 @@ import redis.asyncio as aioredis
 from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from api.config import settings
 from api.database import AsyncSessionLocal
+from api.utils.ratelimit import limiter
 from api.routers import auth, links
 from api.routers import settings as settings_router
-from api.routers import feeds, notifications
+from api.routers import feeds, notifications, admin
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -26,9 +29,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Arciv API", version="0.1.0", lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +46,7 @@ app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram
@@ -72,4 +80,21 @@ async def health():
 
 
 if FRONTEND_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="spa")
+    # SPA fallback: client-side routes (e.g. /verify-email, /reset-password) are
+    # opened directly from email links, so any non-API, non-asset GET must serve
+    # index.html and let the React app route. Real asset requests still resolve
+    # because StaticFiles is tried first for existing files.
+    from starlette.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa(full_path: str):
+        candidate = (FRONTEND_DIST / full_path).resolve()
+        # Serve a real built asset if the path maps to one (guard against
+        # path traversal by confirming it stays inside FRONTEND_DIST).
+        if (
+            full_path
+            and FRONTEND_DIST.resolve() in candidate.parents
+            and candidate.is_file()
+        ):
+            return FileResponse(candidate)
+        return FileResponse(FRONTEND_DIST / "index.html")

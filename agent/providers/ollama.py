@@ -40,3 +40,22 @@ class OllamaProvider(AIProvider):
             if isinstance(e, ParseError):
                 raise
             raise RuntimeError(msg) from e
+
+    async def generate(self, system: str, user_message: str) -> str:
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_message},
+            ],
+            "stream": False,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
+                resp.raise_for_status()
+                return resp.json()["message"]["content"]
+        except httpx.ConnectError as e:
+            raise ConnectionError(f"Ollama unreachable at {self._base_url}: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(str(e)) from e

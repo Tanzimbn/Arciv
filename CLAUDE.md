@@ -27,7 +27,7 @@ Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the 
 ## Project Structure
 
 ```
-arciv/  (project root — d:/Projects/Arciv/)
+arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 ├── api/                        # FastAPI application
 │   ├── routers/                # auth, links, feeds, notifications, settings, telegram
 │   ├── models/                 # user, link, feed, notification, job
@@ -55,11 +55,13 @@ arciv/  (project root — d:/Projects/Arciv/)
 │   └── migrations/
 │       ├── env.py              # Async Alembic env
 │       └── versions/           # 0001 users+links, 0002 jobs,
-│                               # 0003 feeds+notifications, 0004 telegram fields
+│                               # 0003 feeds+notifications, 0004 telegram fields,
+│                               # 0005 timestamptz, 0006 feed_category
 ├── frontend/                   # React + Vite + Tailwind SPA
 │   └── src/
 │       ├── views/              # LoginView, LinksView, FeedsView, SettingsView
-│       ├── components/         # QueueTabs, UrlInputBar, LinkCard, NotificationBell
+│       ├── components/         # QueueTabs, UrlInputBar, LinkCard, NotificationBell,
+│       │                       # SubpageNav
 │       └── api/client.js
 ├── alembic.ini
 ├── docker-compose.yml          # db, redis, api, worker, bot
@@ -99,10 +101,10 @@ class AIProvider:
 
 Each phase is wired up; ongoing work is hardening, edge cases, and polish.
 
-1. **Foundation** — Docker Compose (PostgreSQL 16 + Redis 7 + api + worker + bot), Alembic migrations, JWT auth, `/health` endpoint that probes db, redis, and last feed-poll timestamp.
+1. **Foundation** — Docker Compose (PostgreSQL 16 + Redis 7 + api + worker + bot), Alembic migrations, JWT auth, `GET /health` endpoint (probes DB + Redis ping + `arciv:last_feed_poll` Redis key set by worker).
 2. **Link saving** — `POST /api/links` (metadata fetch via `api/utils/metadata.py`, URL canonicalisation, dedup at DB level), list/patch/delete, retry-ai. Frontend `LinksView` with `QueueTabs` + `UrlInputBar` + `LinkCard`.
 3. **AI pipeline** — ARQ queue (`worker/worker.py`), five providers behind one interface, classify+summarise in a single LLM call, exponential backoff (2 min → 10 min → 1 hour → `failed`), hourly `sweep_failed_links` cron. Settings page (`/api/settings`, `/api/settings/ai/test`).
-4. **Feed tracker** — `feeds` + `feed_items` tables, RSS auto-discovery (`api/utils/feed_discovery.py`), daily cron poll driven by `FEED_POLL_CRON`, failure handling with consecutive-failure tracking. **Feeds are notification-only, not auto-ingest** (deliberate deviation from `requirements-mvp.md:220`): subscribing seeds existing GUIDs into `feed_items` with `link_id=NULL` but creates no `Link` rows; the daily poll likewise records new GUIDs and emits a single grouped notification (title + URL per new post in `Notification.body`) without saving anything. The user manually saves any post they want via the existing `POST /api/links` flow. Do not reintroduce auto-Link creation from feeds.
+4. **Feed tracker** — `feeds` + `feed_items` tables, RSS auto-discovery (`api/utils/feed_discovery.py`), daily cron poll driven by `FEED_POLL_CRON`, failure handling with consecutive-failure tracking. Feeds support an optional `category` field (String, nullable) for user-defined grouping — exposed in `FeedCreate`, `FeedUpdate`, `FeedResponse` schemas and `PATCH /api/feeds/:id`. **Feeds are notification-only, not auto-ingest** (deliberate deviation from `requirements-mvp.md:220`): subscribing seeds existing GUIDs into `feed_items` with `link_id=NULL` but creates no `Link` rows; the daily poll likewise records new GUIDs and emits a single grouped notification (title + URL per new post in `Notification.body`) without saving anything. The user manually saves any post they want via the existing `POST /api/links` flow. Do not reintroduce auto-Link creation from feeds.
 5. **Notifications + Telegram** — in-app notification bell, Telegram bot (`bot/main.py`) — token-based account linking, URL submission via DM, `send_daily_digest` cron at 09:00 UTC. **Telegram is currently disabled** by default: `TELEGRAM_ENABLED=false` skips the `/api/telegram/*` router registration in `api/main.py` and the digest cron in `worker/worker.py`, and the `bot` service is behind the `telegram` Compose profile (`docker compose --profile telegram up` to start it).
 
 ## Key API Endpoints (MVP)
@@ -121,7 +123,7 @@ POST   /api/links/:id/retry-ai
 POST   /api/feeds/discover     # Returns feed info without subscribing
 POST   /api/feeds
 GET    /api/feeds
-PATCH  /api/feeds/:id          # pause/resume
+PATCH  /api/feeds/:id          # pause/resume, set category
 DELETE /api/feeds/:id
 POST   /api/feeds/:id/check-now
 
@@ -132,7 +134,7 @@ GET    /api/settings
 PATCH  /api/settings
 POST   /api/settings/ai/test
 
-GET    /health
+GET    /health                  # db + redis probe, last feed-poll timestamp
 ```
 
 ## Database Key Constraints
@@ -157,7 +159,7 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 
 ## Working in this Repo
 
-- **Shell is PowerShell** on Windows. Use `$env:VAR` not `$VAR`, and use the Bash tool for POSIX one-liners.
+- **Shell is zsh** on macOS.
 - **Migrations**: when you touch a model, add a new Alembic version under `db/migrations/versions/`. Don't edit existing migrations.
 - **Async everywhere**: routers, DB sessions (`AsyncSessionLocal`), `httpx`, and ARQ jobs are all async. Avoid sync calls in request paths.
 - **New ARQ jobs**: register the function in `worker/worker.py` `WorkerSettings.functions` or it will not run.

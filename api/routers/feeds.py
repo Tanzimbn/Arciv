@@ -63,6 +63,7 @@ async def subscribe(
         feed_url=body.feed_url,
         title=body.title,
         favicon_url=body.favicon_url,
+        category=body.category,
     )
     db.add(feed)
     await db.flush()  # get feed.id before commit
@@ -110,6 +111,8 @@ async def update_feed(
         if body.status not in ("active", "paused"):
             raise HTTPException(status_code=400, detail="status must be 'active' or 'paused'")
         feed.status = body.status
+    if body.category is not None:
+        feed.category = body.category
 
     await db.commit()
     await db.refresh(feed)

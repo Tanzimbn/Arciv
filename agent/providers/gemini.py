@@ -23,3 +23,15 @@ class GeminiProvider(AIProvider):
             if isinstance(e, ParseError):
                 raise
             raise
+
+    async def generate(self, system: str, user_message: str) -> str:
+        try:
+            response = await self._model.generate_content_async(f"{system}\n\n{user_message}")
+            return response.text
+        except Exception as e:
+            msg = str(e)
+            if "API_KEY_INVALID" in msg or "401" in msg or "403" in msg:
+                raise AuthError(msg) from e
+            if "429" in msg or "quota" in msg.lower():
+                raise QuotaError(msg) from e
+            raise

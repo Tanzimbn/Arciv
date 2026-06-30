@@ -15,3 +15,8 @@ class AIProvider(ABC):
     @abstractmethod
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
         ...
+
+    @abstractmethod
+    async def generate(self, system: str, user_message: str) -> str:
+        """Send a free-form system + user prompt, return raw text response."""
+        ...

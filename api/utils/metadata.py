@@ -46,13 +46,26 @@ def _assert_safe_url(url: str) -> None:
             raise
 
 
+def _unwrap_redirect_url(url: str) -> str:
+    """Extract the real destination from JS-redirect wrapper URLs (e.g. google.com/url?q=...)."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if (host == "google.com" or host.endswith(".google.com")) and parsed.path == "/url":
+        q = parse_qs(parsed.query).get("q", [None])[0]
+        if q and q.startswith("http"):
+            return q
+    return url
+
+
 async def canonicalize_url(url: str) -> str:
     """Follows redirects, strips tracking params, and normalizes trailing slash for a URL."""
     _assert_safe_url(url)
+    url = _unwrap_redirect_url(url)
+    _assert_safe_url(url)
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-            resp = await client.head(url, headers=HEADERS)
-            final_url = str(resp.url)
+            async with client.stream("GET", url, headers=HEADERS) as resp:
+                final_url = str(resp.url)
     except (httpx.TimeoutException, httpx.RequestError):
         final_url = url
 
@@ -72,12 +85,23 @@ async def canonicalize_url(url: str) -> str:
     ))
 
 
+def _parse_date(value: str | None) -> "datetime | None":
+    if not value:
+        return None
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
 async def fetch_metadata(url: str) -> dict:
-    """Fetch page and extract title, description, favicon."""
+    """Fetch page and extract title, description, favicon, published_date."""
     result = {
         "title": None,
         "description": None,
         "favicon_url": None,
+        "published_date": None,
         "fetch_status": "ok",
     }
 
@@ -115,6 +139,19 @@ async def fetch_metadata(url: str) -> dict:
         if meta_desc and meta_desc.get("content"):
             result["description"] = meta_desc["content"].strip()
 
+    # Published date: article:published_time > datePublished > date > <time datetime>
+    pub = (
+        soup.find("meta", property="article:published_time")
+        or soup.find("meta", attrs={"name": "date"})
+        or soup.find("meta", property="og:updated_time")
+    )
+    if pub and pub.get("content"):
+        result["published_date"] = _parse_date(pub["content"])
+    if not result["published_date"]:
+        time_tag = soup.find("time", attrs={"datetime": True})
+        if time_tag:
+            result["published_date"] = _parse_date(time_tag["datetime"])
+
     # Favicon
     icon = soup.find("link", rel=lambda r: r and "icon" in r)
     if icon and icon.get("href"):
@@ -127,3 +164,38 @@ async def fetch_metadata(url: str) -> dict:
         result["favicon_url"] = f"{base}/favicon.ico"
 
     return result
+
+
+async def fetch_article_text(url: str, max_chars: int = 6000) -> str:
+    """Fetch readable article text for AI processing. Returns empty string on failure."""
+    try:
+        _assert_safe_url(url)
+    except ValueError:
+        return ""
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=12.0) as client:
+            resp = await client.get(url, headers=HEADERS)
+            resp.raise_for_status()
+    except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+        return ""
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Remove noise elements
+    for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "iframe"]):
+        tag.decompose()
+
+    # Prefer semantic article containers
+    body = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(id=lambda i: i and "content" in i.lower())
+        or soup.find(class_=lambda c: c and "content" in " ".join(c).lower())
+        or soup.body
+    )
+    if body is None:
+        return ""
+
+    text = " ".join(body.get_text(separator=" ").split())
+    return text[:max_chars]

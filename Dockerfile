@@ -38,4 +38,5 @@ COPY --from=frontend-build /frontend/dist ./frontend/dist
 # Windows (which doesn't preserve Unix exec bits across COPY).
 RUN chmod +x /app/bin/start.sh
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Honour Render/PaaS-injected $PORT; fall back to 8000 for local/compose.
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
