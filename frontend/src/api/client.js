@@ -154,4 +154,5 @@ export const api = {
 
   adminListUsers: () => request("GET", "/admin/users"),
   adminDeleteUser: (id) => request("DELETE", `/admin/users/${id}`),
+  adminStats: (days = 30) => request("GET", `/admin/stats?days=${days}`),
 };
