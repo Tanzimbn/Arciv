@@ -2,6 +2,12 @@
 
 > Focus: Ship the smallest useful version. Three core features, done well.
 
+> **Status (2026-07-01): implemented.** All MVP phases below have shipped, plus
+> production auth hardening (email verification, refresh-token rotation, password
+> reset) and an admin monitoring panel. This document is kept as the historical
+> spec-of-record; see [CHANGELOG.md](../CHANGELOG.md) for what is actually live and
+> [requirements-full.md](requirements-full.md) for the forward roadmap.
+
 ---
 
 ## What this MVP does

@@ -596,7 +596,16 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-### Phase 1 — Core pipeline (weeks 1–4)
+> **Status (2026-07-01).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> Auth was hardened beyond the original scope (email verification, refresh-token
+> rotation, password reset, rate limiting) and an **admin monitoring panel**
+> (daily traffic, unique visitors, signups via Redis aggregate counters) landed
+> ahead of Phase 5. The **next focus is the AI productivity layer** — Phase 3
+> (semantic search / similar items via pgvector embeddings) then Phase 4
+> (proactive resurface + weekly digest). Embeddings are the foundation both
+> depend on and are not yet built.
+
+### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
 
 - [ ] Project scaffolding: FastAPI + PostgreSQL + Redis via Docker Compose
@@ -612,8 +621,11 @@ Classification rules:
 
 ---
 
-### Phase 2 — Feed tracker (weeks 5–7)
+### Phase 2 — Feed tracker ✅ shipped (notification-only)
 **Goal**: Passive content collection from RSS/Substack sources.
+**Deviation**: feeds are notification-only — subscribing seeds GUIDs and the daily
+poll emits one grouped notification per feed; no auto-ingest of `Link` rows. The
+user saves what they want via `POST /api/links`.
 
 - [ ] `feeds` table + Alembic migration
 - [ ] Feed auto-discovery algorithm
@@ -627,8 +639,10 @@ Classification rules:
 
 ---
 
-### Phase 3 — Semantic search & topic explorer (weeks 8–10)
-**Goal**: Make the saved library discoverable and connected.
+### Phase 3 — Semantic search & topic explorer ⭐ NEXT
+**Goal**: Make the saved library discoverable and connected. **Foundation step:
+generate an embedding per link at save time (pgvector) — the substrate for search,
+similar-items, dedup, and clustering. Not yet built.**
 
 - [ ] pgvector IVFFlat index for fast similarity search
 - [ ] Natural language search endpoint with embedding-based ranking
@@ -640,8 +654,10 @@ Classification rules:
 
 ---
 
-### Phase 4 — Proactive agent & digest (weeks 11–14)
-**Goal**: The system becomes an active partner, not a passive archive.
+### Phase 4 — Proactive agent & digest (after Phase 3)
+**Goal**: The system becomes an active partner, not a passive archive. `worker/
+daily_digest.py` is already scaffolded; the work is AI-ranking the backlog to
+resurface forgotten-but-relevant items.
 
 - [ ] Daily background job per user (BullMQ delayed jobs)
 - [ ] Stale item nudge (14-day resurface)
@@ -655,16 +671,17 @@ Classification rules:
 
 ---
 
-### Phase 5 — Optimisation & polish (weeks 15+)
+### Phase 5 — Optimisation & polish (ongoing)
 **Goal**: Production-ready performance and developer experience.
 
 - [ ] Redis caching for frequent API queries
-- [ ] Rate limiting middleware
+- [x] Rate limiting middleware (slowapi + Redis; auth + link-save limits)
 - [ ] API response time profiling + slow query analysis
 - [ ] Lighthouse performance audit + fixes
 - [ ] Full data export endpoint
-- [ ] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
-- [ ] Comprehensive README with self-hosting guide
+- [x] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
+- [x] Comprehensive README with self-hosting guide
+- [x] Admin monitoring panel — daily traffic, unique visitors, signups (Redis counters)
 
 ---
 
