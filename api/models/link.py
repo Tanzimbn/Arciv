@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from api.database import Base
 
@@ -54,6 +55,10 @@ class Link(Base):
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_insights: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+
+    # Semantic-search embedding (384-dim, fastembed). Populated asynchronously by
+    # the worker (worker/embed.py); nullable and never serialized in LinkResponse.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
 
     # Timestamps
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())

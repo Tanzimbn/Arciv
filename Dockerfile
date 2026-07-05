@@ -28,6 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-fetch the fastembed ONNX model into the image so containers start
+# offline-ready with no first-request cold-start download. Keep the model name
+# in sync with EMBEDDING_MODEL (api/config.py).
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5')"
+
 COPY . .
 
 # Replace any local frontend/dist with the freshly-built one from stage 1

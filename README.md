@@ -51,6 +51,8 @@ All five MVP phases are scaffolded: foundation, link saving, AI pipeline, feed t
 - **Feed tracking, the polite way** — subscribe to RSS/Atom feeds and receive a single grouped notification per feed when new posts appear. **No auto-ingest** — you decide what to save. RSS auto-discovery, ETag/Last-Modified conditional polling, failure handling (degraded at 7 consecutive failures, dead at 30).
 - **In-app notifications** — bell icon with unread counter, accessible across the app.
 - **Optional Telegram bot** — link your account with a one-time token, save URLs via DM, receive daily digests. Off by default behind a feature flag.
+- **Production-grade auth** — email verification (block-until-verified), short-lived access JWT + rotating refresh tokens, password reset, password-strength rules, and per-endpoint rate limiting. Verification/reset email via Gmail API or SMTP.
+- **Admin monitoring panel** — an `/admin` dashboard (gated by `ADMIN_EMAILS`) showing daily traffic, unique visitors, and signups, plus user management. Metrics use lightweight Redis aggregate counters (no per-request rows, IPs hashed).
 - **Single-command self-hosting** — `docker compose up`. Postgres, Redis, API, worker, all in one stack. Frontend served by FastAPI in production.
 - **Cron-driven feed polling** — configurable schedule (default daily at 08:00 UTC).
 
@@ -122,8 +124,14 @@ All configuration is via `.env`. See [.env.example](.env.example) for every vari
 | `USER_AGENT` | `Arciv/0.1 (+https://github.com/Tanzimbn/Arciv)` | Outbound HTTP User-Agent for feed/metadata fetches. Set this on a public instance so site operators can reach you. |
 | `TELEGRAM_ENABLED` | `false` | Master switch for all Telegram features. See [Telegram Bot](#telegram-bot-optional). |
 | `TELEGRAM_BOT_TOKEN` | *unset* | Required only when `TELEGRAM_ENABLED=true`. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | JWT lifetime in minutes (default 7 days). |
-| `ENVIRONMENT` | `development` | Set to `production` for production deploys. |
+| `ADMIN_EMAILS` | *unset* | Comma-separated emails granted the admin panel (`/admin`) and `/api/admin/*`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access-JWT lifetime in minutes. Refresh tokens keep sessions alive. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh-token lifetime. Rotated on every use, revoked on logout/reset. |
+| `EMAIL_ENABLED` | `false` | Turn on outbound email (verification, password reset). When off, links are logged to stdout for local dev. |
+| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | *unset* | Gmail API (HTTPS) email backend — works where outbound SMTP ports are blocked. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | *unset* | Classic SMTP email backend (alternative to Gmail API). |
+| `APP_BASE_URL` | `http://localhost:8000` | Base URL used to build verification / reset links in emails. |
+| `ENVIRONMENT` | `development` | Set to `production` for production deploys (also disables API docs). |
 
 ## AI Providers
 
@@ -211,7 +219,7 @@ arciv/
 ├── bot/                # Telegram bot (long-polling)
 ├── db/migrations/      # Alembic versions
 ├── frontend/           # React SPA (Vite + Tailwind)
-├── docs/               # Spec, ADRs, screenshots
+├── docs/               # MVP + full spec, link state diagram
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
 ├── Dockerfile
@@ -273,6 +281,15 @@ alembic downgrade -1
 
 ## Monitoring
 
+### Admin dashboard
+
+Users listed in `ADMIN_EMAILS` get an **Admin** panel at `/admin`:
+
+- **Overview** — daily requests, unique visitors, and signups over the last 30 days, with today's totals. Traffic and unique visitors come from Redis aggregate counters (`stats:req:*`, `stats:uv:*` HyperLogLog, `stats:err:*`) written by a best-effort HTTP middleware — tiny footprint, no per-request rows, visitor IPs hashed. Signups are derived from `users.created_at`.
+- **Users** — list and delete users (admins can't be deleted).
+
+Backed by `GET /api/admin/stats?days=30`.
+
 ### Health check
 
 ```bash
@@ -292,8 +309,9 @@ docker compose logs -f worker   # worker only
 ## Security
 
 - **Encryption at rest:** AI provider API keys are AES-GCM encrypted with `ENCRYPTION_KEY` before storage. Rotating `ENCRYPTION_KEY` invalidates all stored keys (users re-enter them).
-- **Authentication:** JWT tokens signed with `SECRET_KEY` (HS256), default 7-day expiry.
-- **Multi-tenancy:** every database query filters on `user_id`. Cross-user access is structurally impossible.
+- **Authentication:** short-lived access JWT (HS256, 15 min default) plus a DB-backed refresh token with rotation and revocation. Email verification is required before login; password reset over single-use Redis tokens; password-strength rules on register/reset. Auth endpoints are rate-limited (login, register, forgot/resend, reset).
+- **Multi-tenancy:** every database query filters on `user_id`. Cross-user access is structurally impossible. Admin endpoints (`/api/admin/*`) are gated by `ADMIN_EMAILS`.
+- **Production hardening:** interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled when `ENVIRONMENT=production`.
 - **SSRF protection:** outbound HTTP requests refuse private network ranges and non-`http(s)` schemes.
 - **URL canonicalization:** trailing slashes normalized, tracking params (`utm_*`, `fbclid`, `gclid`, `ref`) stripped, redirects followed before storage.
 - **CI hardening:** PR builds in GitHub Actions never write to shared caches (no cache-poisoning vector).
@@ -349,6 +367,11 @@ If you're working on something that touches the spec (`docs/requirements-mvp.md`
 - **New ARQ jobs must be registered** in [worker/worker.py](worker/worker.py) `WorkerSettings.functions`.
 - **Touching a model? Add a new migration.** Don't edit existing ones.
 
+### Shipped since 0.1.0
+- Production auth hardening — email verification, refresh-token rotation, password reset, rate limiting
+- Gmail API email backend (works where SMTP ports are blocked)
+- Admin monitoring panel — traffic, unique visitors, signups + user management
+
 ## Roadmap
 
 ### Public hosted service
@@ -362,17 +385,22 @@ The direction: run Arciv as a hosted, multi-tenant site so anyone can use it wit
 
 Not committed to a date; tracked as the "Public hosted launch" block in [docs/requirements-full.md](docs/requirements-full.md).
 
-### v0.2 (next)
+### AI productivity layer (next focus)
+The core bet: turn a growing pile of saved links into something queryable and self-surfacing.
+- **Embeddings at save time (pgvector)** — the foundation for everything below
+- **Semantic search** — "that article about Go concurrency" without the title
+- **Similar links** — related saves in the detail drawer; near-duplicate detection at save time
+- **Resurface digest** — AI-ranked weekly nudge of forgotten-but-relevant links (`worker/daily_digest.py` is scaffolded)
+
+### v0.2
 - Browser extension for one-click save
-- Full-text search over link titles + summaries
 - Data export (JSON, OPML for feeds)
 - Better error visibility in the UI (AI failures, feed degradation)
 
 ### v0.3 (later)
-- Topic clustering via embeddings (pgvector)
-- Multi-user support with admin UI
 - OAuth providers for login
 - Mobile-friendly responsive polish
+- "Ask your library" — RAG chat over saved links, grounded with citations
 
 ### Open ideas
 - Webhook destinations for new feed items (Discord, Slack)
