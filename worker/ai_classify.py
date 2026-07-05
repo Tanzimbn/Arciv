@@ -85,6 +85,8 @@ async def classify_link(ctx, link_id: str) -> None:
             link.ai_error = None
             link.processed_at = datetime.now(timezone.utc)
             await db.commit()
+            # Re-embed now that summary + tags exist, to enrich the vector.
+            await redis.enqueue_job("embed_link", link_id)
 
         except AuthError as e:
             link.ai_status = "failed"

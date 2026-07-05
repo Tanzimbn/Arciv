@@ -1,6 +1,9 @@
 services:
   db:
-    image: postgres:16-alpine
+    # pgvector image = Postgres 16 + the `vector` extension (for embeddings /
+    # semantic search). Same PG16 major as before, so existing data volumes stay
+    # compatible; migration 0012 runs CREATE EXTENSION vector.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: arciv
       POSTGRES_PASSWORD: arciv
