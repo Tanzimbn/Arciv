@@ -6,7 +6,9 @@
 > production auth hardening (email verification, refresh-token rotation, password
 > reset) and an admin monitoring panel. This document is kept as the historical
 > spec-of-record; see [CHANGELOG.md](../CHANGELOG.md) for what is actually live and
-> [requirements-full.md](requirements-full.md) for the forward roadmap.
+> [requirements-full.md](requirements-full.md) for the forward roadmap — which now
+> includes taking Arciv public as a hosted, bring-your-own-key multi-tenant service
+> (planned; see requirements-full §3.6).
 
 ---
 
