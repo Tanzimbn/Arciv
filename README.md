@@ -13,6 +13,8 @@
 </div>
 
 > **Status:** Early alpha. The MVP is functional and self-hostable, but APIs and schemas may still change. Feedback and PRs welcome.
+>
+> **Where it's heading:** alongside self-hosting, Arciv is being prepared to run as a **public, hosted service** — sign up on the deployed site and use it by bringing your own AI provider key. Self-hosting stays a first-class supported mode. The hosted offering is *planned, not live yet*; see [Roadmap → Public hosted service](#public-hosted-service).
 
 Arciv is a personal read-it-later that thinks. Save any URL — the system pulls metadata, runs it through an AI provider you control, and routes it into the right queue (Watch Later, Read Later, Try Later, Inbox). Subscribe to RSS feeds and get notified when new posts appear — no spam, no auto-ingest.
 
@@ -348,6 +350,17 @@ If you're working on something that touches the spec (`docs/requirements-mvp.md`
 - **Touching a model? Add a new migration.** Don't edit existing ones.
 
 ## Roadmap
+
+### Public hosted service
+The direction: run Arciv as a hosted, multi-tenant site so anyone can use it without self-hosting — **bring your own AI provider key** (from the providers the app offers) and go. Self-hosting stays first-class. This is a *deployment/operations layer on top of the existing app*, not a rewrite — the tenancy foundation (`user_id` scoping, AES-256 key encryption, email verification, auth rate limiting, SSRF guard) already exists. What's left before it can safely be public:
+- **Rate limiting on non-auth routes** — `POST /links` and `/links/search` are currently unlimited (auth routes already are). Search especially, since each query runs a server-side embedding.
+- **Per-user resource quotas** — max links / feeds / storage per account, so one user can't fill the DB.
+- **Registration-abuse controls** — throttle / captcha on open signup beyond the current per-IP cap; disposable-email handling.
+- **Key-custody hardening** — a single `ENCRYPTION_KEY` today encrypts every user's provider key; add envelope encryption + a rotation path before holding many users' keys.
+- **Embedding-load control** — cap concurrent embeds (or split embedding to its own service) so search traffic can't starve request handling.
+- **Legal & lifecycle** — Terms of Service, privacy policy, and self-serve data export + account deletion.
+
+Not committed to a date; tracked as the "Public hosted launch" block in [docs/requirements-full.md](docs/requirements-full.md).
 
 ### v0.2 (next)
 - Browser extension for one-click save
