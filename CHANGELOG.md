@@ -102,23 +102,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for v0.2.0
-- Full-text search with PostgreSQL
-- Topic clustering and exploration
-- Browser extension for easier link saving
-- Data export functionality (JSON, CSV)
-- Multi-user support with teams
-- OAuth providers (Google, GitHub)
-- Advanced analytics dashboard
-- Mobile app (iOS/Android)
+### Added
+- **Auth hardening** — email verification (block-until-verified), short-lived access JWT + DB-backed refresh tokens with rotation & revocation, password reset, password-strength rules, and per-endpoint rate limiting (slowapi + Redis).
+- **Email delivery** — Gmail API (HTTPS) backend that works where outbound SMTP ports are blocked, plus a classic SMTP backend. Off by default (`EMAIL_ENABLED`); links log to stdout in local dev.
+- **Admin monitoring panel** — `/admin` dashboard (gated by `ADMIN_EMAILS`) with daily traffic, unique visitors, and signups over 30 days, plus user management. Traffic/unique-visitor metrics use lightweight Redis aggregate counters (INCR + HyperLogLog on hashed IPs, no per-request rows); `GET /api/admin/stats`.
+- **Deploy** — Render blueprint; Neon/Upstash compatibility; secret scanning in CI.
+
+### Changed
+- Interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled when `ENVIRONMENT=production`.
+- Access-token lifetime default lowered from 7 days to 15 minutes (refresh tokens now keep sessions alive).
+
+### Planned (next — AI productivity layer)
+- Per-link embeddings at save time (pgvector) — foundation for the below
+- Semantic search over the saved library
+- Similar-links panel + near-duplicate detection
+- AI-ranked resurface / weekly digest
+- Browser extension, data export (JSON, OPML), OAuth login
 
 ---
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/arciv/issues)
+- **Issues**: [GitHub Issues](https://github.com/Tanzimbn/Arciv/issues)
 - **Documentation**: [README.md](README.md)
-- **Community**: [GitHub Discussions](https://github.com/yourusername/arciv/discussions)
+- **Community**: [GitHub Discussions](https://github.com/Tanzimbn/Arciv/discussions)
 
 ---
 

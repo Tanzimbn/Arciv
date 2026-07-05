@@ -153,6 +153,8 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [layout, setLayout] = useState(() => localStorage.getItem("arciv_layout") || "grid");
   const [selectedLink, setSelectedLink] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [semanticResults, setSemanticResults] = useState(null); // null = no semantic results (fall back to substring)
+  const [searching, setSearching] = useState(false);
   const [username, setUsername] = useState(null);
 
   // apply body classes
@@ -218,23 +220,45 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     return () => clearInterval(id);
   }, [hasPending, refreshSilently]);
 
-  // Filter links client-side
-  const visible = useMemo(() => {
-    let base;
-    if (activeQueue === "archive") base = allLinks.filter(l => l.status === "done");
-    else if (activeQueue === null) base = allLinks.filter(l => l.status !== "done");
-    else base = allLinks.filter(l => l.queue === activeQueue && l.status !== "done");
+  // Debounced semantic search. Server returns relevance-ranked, whole-library
+  // results; on error/503 we fall back to client-side substring filtering.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) { setSemanticResults(null); setSearching(false); return; }
+    setSearching(true);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.searchLinks(q);
+        if (!cancelled) setSemanticResults(res);
+      } catch {
+        if (!cancelled) setSemanticResults(null); // fall back to substring
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [searchQuery]);
 
+  // Visible links. With a query: semantic results when available, else an
+  // instant substring match over the whole library (also the fallback while the
+  // request is in flight or if search is unavailable). Without: the queue view.
+  const visible = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(l =>
-      l.title?.toLowerCase().includes(q) ||
-      l.canonical_url?.toLowerCase().includes(q) ||
-      l.description?.toLowerCase().includes(q) ||
-      l.ai_summary?.toLowerCase().includes(q) ||
-      l.ai_tags?.some(t => t.toLowerCase().includes(q))
-    );
-  }, [allLinks, activeQueue, searchQuery]);
+    if (q) {
+      if (semanticResults) return semanticResults;
+      return allLinks.filter(l =>
+        l.title?.toLowerCase().includes(q) ||
+        l.canonical_url?.toLowerCase().includes(q) ||
+        l.description?.toLowerCase().includes(q) ||
+        l.ai_summary?.toLowerCase().includes(q) ||
+        l.ai_tags?.some(t => t.toLowerCase().includes(q))
+      );
+    }
+    if (activeQueue === "archive") return allLinks.filter(l => l.status === "done");
+    if (activeQueue === null) return allLinks.filter(l => l.status !== "done");
+    return allLinks.filter(l => l.queue === activeQueue && l.status !== "done");
+  }, [allLinks, activeQueue, searchQuery, semanticResults]);
 
   // Counts per tab
   const counts = useMemo(() => ({
@@ -628,8 +652,9 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
               <span style={{ width: 3, height: 3, borderRadius: 99, background: "var(--muted-2)" }} />
               {searchQuery.trim() ? (
                 <span style={{ fontFamily: "monospace" }}>
-                  {visible.length} match{visible.length !== 1 ? "es" : ""}
-                  <span style={{ color: "var(--muted-2)" }}> of {counts[activeQueue ?? "all"] ?? 0}</span>
+                  {searching
+                    ? "searching…"
+                    : `${visible.length} ${semanticResults ? "result" : "match"}${visible.length !== 1 ? "s" : ""}`}
                 </span>
               ) : (
                 <span style={{ fontFamily: "monospace" }}>{visible.length} link{visible.length !== 1 ? "s" : ""}</span>
@@ -668,7 +693,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
           </span>
           <input
             type="text"
-            placeholder="Search by title, URL, tag, or summary…"
+            placeholder="Search your library by meaning…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             style={{

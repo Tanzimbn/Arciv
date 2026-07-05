@@ -116,6 +116,9 @@ export const api = {
       : Promise.resolve();
   },
 
+  searchLinks: (query, limit = 30) =>
+    request("GET", `/links/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+
   getLinks: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
@@ -154,4 +157,5 @@ export const api = {
 
   adminListUsers: () => request("GET", "/admin/users"),
   adminDeleteUser: (id) => request("DELETE", `/admin/users/${id}`),
+  adminStats: (days = 30) => request("GET", `/admin/stats?days=${days}`),
 };

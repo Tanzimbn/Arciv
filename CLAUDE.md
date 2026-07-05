@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the full spec (`docs/requirements-full.md`).
 
+**Deployment direction (planned, not yet built).** Arciv is moving from self-host-only to also running as a **public, hosted multi-tenant service**: anyone can sign up on the deployed site and use it by bringing their own AI provider API key (from the providers the app offers). Self-hosting stays a first-class, supported mode. This pivot adds a *public-internet hardening layer* on top of the existing tenancy foundation (`user_id` scoping, AES-256 key encryption, email verification, auth rate limiting, SSRF guard on outbound fetches). Known gaps to close before public launch: rate limiting on non-auth routes (link create, `/links/search`), per-user resource quotas (max links/feeds/storage), registration-abuse controls, ENCRYPTION_KEY custody/rotation, and legal (ToS + privacy + data-deletion). See `docs/requirements-full.md` §3.6 and the Phase "Public hosted launch" roadmap block. Do not claim any of this is shipped until it is.
+
 ## Tech Stack
 
 | Layer | Technology |

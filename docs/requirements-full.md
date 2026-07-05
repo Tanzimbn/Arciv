@@ -52,6 +52,11 @@ Arciv is a self-hostable web application where:
 - A semantic search and topic clustering system surfaces related content across all saved items
 - A proactive agent resurfaces stale or relevant content at the right time
 
+**Deployment modes.** Arciv targets two first-class modes from the same codebase:
+
+- **Self-hosted** (shipped) — `docker compose up`, single- or multi-user, operator controls everything.
+- **Public hosted service** (planned) — a deployed instance anyone can sign up on, using their **own AI provider key** (BYOK) chosen from the providers the app offers. No per-user AI cost falls on the operator; the multi-tenant foundation (per-`user_id` isolation, encrypted keys, email verification) already exists. This mode adds a public-internet hardening layer — see §3.6.
+
 ### Goals
 
 - **Learn by building**: the architecture deliberately exercises system design, agentic AI, scaling, and optimization
@@ -280,7 +285,7 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 **NFR-SEC-02**: User data must be strictly isolated — queries must always be scoped to the authenticated user's `user_id`; no cross-user data access is permitted.
 
-**NFR-SEC-03**: LLM API keys must be stored as environment variables only — never in the database or committed to version control.
+**NFR-SEC-03**: User-supplied LLM API keys (BYOK) are stored **encrypted at rest** (AES-256 via `ENCRYPTION_KEY`), never returned to the client (masked only), and never committed to version control. An optional operator-level shared key may live in env for the free tier. *(Superseded the original env-only rule once per-user BYOK landed.)*
 
 **NFR-SEC-04**: The Telegram bot webhook must validate the `X-Telegram-Bot-Api-Secret-Token` header on every incoming request.
 
@@ -301,6 +306,26 @@ All nudges must be dismissable and configurable — users must be able to disabl
 **NFR-HOST-04**: The system must support full data export to JSON at any time via `GET /api/export`.
 
 **NFR-HOST-05**: The Docker images must be published to GitHub Container Registry (ghcr.io) on every tagged release.
+
+---
+
+### 3.6 Public Hosted Operation (planned)
+
+Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting) and are **not yet implemented**.
+
+**NFR-PUB-01 (BYOK)**: Every user brings their own AI provider key, selected from the app's offered providers. The service must run with **zero per-user AI cost to the operator**; the optional shared free-tier key stays capped per user per day.
+
+**NFR-PUB-02 (rate limiting everywhere)**: Rate limiting must extend beyond auth routes to all state-changing and compute-heavy endpoints — at minimum `POST /api/links` and `GET /api/links/search` (each search runs a server-side embedding). Limits are per user and per IP.
+
+**NFR-PUB-03 (resource quotas)**: Each account must have enforced ceilings — max links, max feeds, and total storage — to prevent a single user from exhausting shared capacity.
+
+**NFR-PUB-04 (registration abuse)**: Open signup must be protected against automated/disposable-email abuse (throttling and/or captcha) beyond the existing per-IP register cap.
+
+**NFR-PUB-05 (key custody)**: Holding many users' provider keys requires envelope encryption and a documented `ENCRYPTION_KEY` rotation path, so key rotation does not force every user to re-enter their key at once.
+
+**NFR-PUB-06 (embedding-load isolation)**: Server-side embedding (save + search) must be bounded — a concurrency cap or a dedicated embedding service — so search load cannot starve API request handling.
+
+**NFR-PUB-07 (legal & lifecycle)**: The hosted service must publish Terms of Service and a privacy policy, and provide self-serve data export (`GET /api/export`) and full account deletion.
 
 ---
 
@@ -596,7 +621,16 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-### Phase 1 — Core pipeline (weeks 1–4)
+> **Status (2026-07-01).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> Auth was hardened beyond the original scope (email verification, refresh-token
+> rotation, password reset, rate limiting) and an **admin monitoring panel**
+> (daily traffic, unique visitors, signups via Redis aggregate counters) landed
+> ahead of Phase 5. The **next focus is the AI productivity layer** — Phase 3
+> (semantic search / similar items via pgvector embeddings) then Phase 4
+> (proactive resurface + weekly digest). Embeddings are the foundation both
+> depend on and are not yet built.
+
+### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
 
 - [ ] Project scaffolding: FastAPI + PostgreSQL + Redis via Docker Compose
@@ -612,8 +646,11 @@ Classification rules:
 
 ---
 
-### Phase 2 — Feed tracker (weeks 5–7)
+### Phase 2 — Feed tracker ✅ shipped (notification-only)
 **Goal**: Passive content collection from RSS/Substack sources.
+**Deviation**: feeds are notification-only — subscribing seeds GUIDs and the daily
+poll emits one grouped notification per feed; no auto-ingest of `Link` rows. The
+user saves what they want via `POST /api/links`.
 
 - [ ] `feeds` table + Alembic migration
 - [ ] Feed auto-discovery algorithm
@@ -627,8 +664,10 @@ Classification rules:
 
 ---
 
-### Phase 3 — Semantic search & topic explorer (weeks 8–10)
-**Goal**: Make the saved library discoverable and connected.
+### Phase 3 — Semantic search & topic explorer ⭐ NEXT
+**Goal**: Make the saved library discoverable and connected. **Foundation step:
+generate an embedding per link at save time (pgvector) — the substrate for search,
+similar-items, dedup, and clustering. Not yet built.**
 
 - [ ] pgvector IVFFlat index for fast similarity search
 - [ ] Natural language search endpoint with embedding-based ranking
@@ -640,8 +679,10 @@ Classification rules:
 
 ---
 
-### Phase 4 — Proactive agent & digest (weeks 11–14)
-**Goal**: The system becomes an active partner, not a passive archive.
+### Phase 4 — Proactive agent & digest (after Phase 3)
+**Goal**: The system becomes an active partner, not a passive archive. `worker/
+daily_digest.py` is already scaffolded; the work is AI-ranking the backlog to
+resurface forgotten-but-relevant items.
 
 - [ ] Daily background job per user (BullMQ delayed jobs)
 - [ ] Stale item nudge (14-day resurface)
@@ -655,16 +696,32 @@ Classification rules:
 
 ---
 
-### Phase 5 — Optimisation & polish (weeks 15+)
+### Phase 5 — Optimisation & polish (ongoing)
 **Goal**: Production-ready performance and developer experience.
 
 - [ ] Redis caching for frequent API queries
-- [ ] Rate limiting middleware
+- [x] Rate limiting middleware (slowapi + Redis; auth + link-save limits)
 - [ ] API response time profiling + slow query analysis
 - [ ] Lighthouse performance audit + fixes
 - [ ] Full data export endpoint
-- [ ] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
-- [ ] Comprehensive README with self-hosting guide
+- [x] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
+- [x] Comprehensive README with self-hosting guide
+- [x] Admin monitoring panel — daily traffic, unique visitors, signups (Redis counters)
+
+---
+
+### Public hosted launch — turn the self-host app into a public multi-tenant service (planned)
+**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. Nothing here is built yet.
+
+- [ ] Rate limiting on `POST /api/links` and `GET /api/links/search` (per user + per IP) — NFR-PUB-02
+- [ ] Per-user resource quotas: max links / feeds / storage — NFR-PUB-03
+- [ ] Registration-abuse controls (throttle / captcha, disposable-email handling) — NFR-PUB-04
+- [ ] Key-custody hardening: envelope encryption + `ENCRYPTION_KEY` rotation path — NFR-PUB-05
+- [ ] Bounded server-side embedding (concurrency cap or dedicated service) — NFR-PUB-06
+- [ ] Legal + lifecycle: ToS, privacy policy, data export, account deletion — NFR-PUB-07
+- [ ] Provider-key onboarding UX: guided BYOK setup at signup (offered providers, validation)
+
+**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet.
 
 ---
 
@@ -683,7 +740,7 @@ Classification rules:
 
 ## 12. Out of Scope (v1)
 
-The following features are explicitly deferred to future versions to keep v1 focused:
+The following features are explicitly deferred to future versions to keep v1 focused. Note: running as a **public multi-tenant hosted service** is now an active direction (§3.6) — but that means many independent single-user tenants, *not* the shared/team features below (team workspaces, collaboration, public developer API remain out of scope).
 
 - Native mobile apps (iOS/Android) — Telegram bot covers mobile use case
 - Social features (sharing collections, following other users)

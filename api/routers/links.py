@@ -16,6 +16,7 @@ from agent.prompt import (
     build_insights_message,
     parse_insights_response,
 )
+from agent.embedding import embed_text
 from agent.registry import make_provider
 from api.config import settings
 from api.utils.encryption import decrypt_value
@@ -101,6 +102,9 @@ async def create_link(
             )
         else:
             await arq_pool.enqueue_job("classify_link", str(link.id))
+        # Embed for semantic search — independent of AI classification, so links
+        # are searchable even when no AI provider is configured.
+        await arq_pool.enqueue_job("embed_link", str(link.id))
 
     return link
 
@@ -129,6 +133,41 @@ async def list_links(
 
     q = q.order_by(Link.saved_at.desc()).offset((page - 1) * limit).limit(limit)
     result = await db.execute(q)
+    return result.scalars().all()
+
+
+@router.get("/search", response_model=list[LinkResponse])
+async def search_links(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(30, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Semantic search over the user's links via embedding similarity.
+
+    Declared before the dynamic /{link_id} routes so "search" isn't captured as
+    an id. User-scoped like every other query. 503 when embeddings are disabled
+    so the frontend can fall back to client-side substring filtering.
+    """
+    if not settings.EMBEDDINGS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Semantic search is disabled.",
+        )
+    vec = await embed_text(q)
+    if vec is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Semantic search is unavailable.",
+        )
+
+    stmt = (
+        select(Link)
+        .where(Link.user_id == current_user.id, Link.embedding.is_not(None))
+        .order_by(Link.embedding.cosine_distance(vec))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 

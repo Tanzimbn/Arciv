@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     SHARED_GEMINI_KEY: str = ""
     FEED_POLL_CRON: str = "0 8 * * *"
 
+    # Local semantic-search embeddings (fastembed, ONNX, runs in-container — no
+    # API key). Disable on very low-RAM hosts; saves still work, /links/search
+    # returns 503 and the UI falls back to substring filtering.
+    EMBEDDINGS_ENABLED: bool = True
+    # Changing the model usually changes the vector dimension, which is baked
+    # into migration 0012 (Vector(384)). A different-dim model needs a new
+    # migration — keep this in sync with the column.
+    EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
     ENVIRONMENT: str = "development"

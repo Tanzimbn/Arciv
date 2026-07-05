@@ -12,10 +12,10 @@ from sqlalchemy import text
 
 from api.config import settings
 from api.database import AsyncSessionLocal
-from api.utils.ratelimit import limiter
-from api.routers import auth, links
+from api.middleware.analytics import traffic_middleware
+from api.routers import admin, auth, feeds, links, notifications
 from api.routers import settings as settings_router
-from api.routers import feeds, notifications, admin
+from api.utils.ratelimit import limiter
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -23,11 +23,25 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+    app.state.analytics_redis = aioredis.from_url(settings.REDIS_URL)
     yield
     await app.state.arq_pool.aclose()
+    await app.state.analytics_redis.aclose()
 
 
-app = FastAPI(title="Arciv API", version="0.1.0", lifespan=lifespan)
+# Expose interactive docs (/docs, /redoc, /openapi.json) only outside
+# production. In production they leak the full API surface (routes, schemas,
+# admin endpoints) as free recon, so disable them.
+_docs_enabled = settings.ENVIRONMENT.lower() != "production"
+
+app = FastAPI(
+    title="Arciv API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -41,15 +55,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Traffic counters (requests / errors / unique visitors) into Redis.
+app.middleware("http")(traffic_middleware)
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(links.router, prefix="/api/links", tags=["links"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
-app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(
+    notifications.router, prefix="/api/notifications", tags=["notifications"]
+)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram
+
     app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 
 
@@ -75,7 +95,9 @@ async def health():
     except Exception as e:
         status_map["redis"] = f"error: {e}"
 
-    overall = "ok" if status_map["db"] == "ok" and status_map["redis"] == "ok" else "degraded"
+    overall = (
+        "ok" if status_map["db"] == "ok" and status_map["redis"] == "ok" else "degraded"
+    )
     return {"status": overall, **status_map}
 
 
