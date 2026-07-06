@@ -61,6 +61,19 @@ class Settings(BaseSettings):
 
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
+    # Public-launch abuse/DoS guards. All default to "off" (0 / False) so
+    # self-hosting stays unrestricted; a hosted deployment sets real ceilings.
+    # Per-user rate limits (fixed-window Redis counters keyed by user_id):
+    LINKS_CREATE_PER_HOUR: int = 30   # POST /api/links
+    SEARCH_PER_MINUTE: int = 30       # GET /api/links/search (each call embeds q)
+    INSIGHTS_PER_HOUR: int = 20       # POST /api/links/:id/insights (LLM call)
+    # Per-user resource quotas (0 = unlimited):
+    MAX_LINKS_PER_USER: int = 0
+    MAX_FEEDS_PER_USER: int = 0
+    # Registration-abuse controls:
+    BLOCK_DISPOSABLE_EMAILS: bool = False  # reject known throwaway email domains
+    SIGNUPS_PER_DAY_GLOBAL: int = 0        # 0 = unlimited; global daily signup ceiling
+
     ENVIRONMENT: str = "development"
 
     # Comma-separated emails granted admin access (user management). Empty = no admins.

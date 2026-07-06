@@ -3,9 +3,10 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.database import get_db
 from api.middleware.auth import get_current_user
 from api.models.feed import Feed, FeedItem
@@ -56,6 +57,16 @@ async def subscribe(
     )
     if result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already subscribed to this feed.")
+
+    if settings.MAX_FEEDS_PER_USER > 0:
+        feed_count = await db.scalar(
+            select(func.count()).select_from(Feed).where(Feed.user_id == current_user.id)
+        )
+        if feed_count >= settings.MAX_FEEDS_PER_USER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Feed limit reached ({settings.MAX_FEEDS_PER_USER}). Unsubscribe from some to add more.",
+            )
 
     feed = Feed(
         user_id=current_user.id,
