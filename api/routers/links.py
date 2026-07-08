@@ -65,9 +65,9 @@ async def create_link(
         arq_pool,
         scope="links",
         user_id=current_user.id,
-        limit=settings.LINKS_CREATE_PER_HOUR,
-        window=3600,
-        detail=f"Rate limit exceeded: {settings.LINKS_CREATE_PER_HOUR} links per hour.",
+        limit=settings.LINKS_CREATE_PER_MINUTE,
+        window=60,
+        detail=f"Too fast — max {settings.LINKS_CREATE_PER_MINUTE} links per minute. Try again in a moment.",
     )
 
     if settings.MAX_LINKS_PER_USER > 0:
@@ -307,9 +307,9 @@ async def generate_insights(
         getattr(request.app.state, "arq_pool", None),
         scope="insights",
         user_id=current_user.id,
-        limit=settings.INSIGHTS_PER_HOUR,
-        window=3600,
-        detail=f"Insights rate limit exceeded: {settings.INSIGHTS_PER_HOUR} per hour.",
+        limit=settings.INSIGHTS_PER_MINUTE,
+        window=60,
+        detail=f"Too fast — max {settings.INSIGHTS_PER_MINUTE} insight requests per minute. Try again in a moment.",
     )
 
     result = await db.execute(

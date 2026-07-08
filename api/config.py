@@ -82,10 +82,15 @@ class Settings(BaseSettings):
 
     # Public-launch abuse/DoS guards. All default to "off" (0 / False) so
     # self-hosting stays unrestricted; a hosted deployment sets real ceilings.
-    # Per-user rate limits (fixed-window Redis counters keyed by user_id):
-    LINKS_CREATE_PER_HOUR: int = 30   # POST /api/links
-    SEARCH_PER_MINUTE: int = 30       # GET /api/links/search (each call embeds q)
-    INSIGHTS_PER_HOUR: int = 20       # POST /api/links/:id/insights (LLM call)
+    # Per-user rate limits (fixed-window Redis counters keyed by user_id).
+    # These are burst/anti-spam guards, NOT usage caps: AI is BYO-key, so the
+    # per-call cost falls on the user, not the operator. The only thing worth
+    # protecting is the server (outbound fetches, request workers, queue depth),
+    # so limits are per-MINUTE — high enough that no human hits them, low enough
+    # to stop a script hammering the box.
+    LINKS_CREATE_PER_MINUTE: int = 20  # POST /api/links (metadata fetch + enqueue)
+    SEARCH_PER_MINUTE: int = 30  # GET /api/links/search (each call embeds q)
+    INSIGHTS_PER_MINUTE: int = 10  # POST /api/links/:id/insights (inline LLM call)
     # Per-user resource quotas (0 = unlimited):
     MAX_LINKS_PER_USER: int = 0
     MAX_FEEDS_PER_USER: int = 0
