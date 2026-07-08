@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     # into migration 0012 (Vector(384)). A different-dim model needs a new
     # migration — keep this in sync with the column.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    # Cap on simultaneous in-process embeddings (fastembed is CPU-bound: even
+    # though inference runs off the event loop, N parallel embeds saturate every
+    # core and starve request handling). Keep this <= cores-1 so the event-loop
+    # thread always has a core. Applies per process, so it globally bounds embed
+    # load on a single-box deploy (api + worker each get their own cap). Raise it
+    # on a bigger host. This module (agent/embedding.py) is the single seam where
+    # a future dedicated embedding service would slot in.
+    EMBEDDING_MAX_CONCURRENCY: int = 2
+    # Cache search-query vectors in Redis so repeated/identical searches skip the
+    # CPU embed entirely. TTL in seconds; 0 disables the cache.
+    SEARCH_EMBED_CACHE_TTL: int = 180
 
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
@@ -80,7 +91,7 @@ class Settings(BaseSettings):
     MAX_FEEDS_PER_USER: int = 0
     # Registration-abuse controls:
     BLOCK_DISPOSABLE_EMAILS: bool = False  # reject known throwaway email domains
-    SIGNUPS_PER_DAY_GLOBAL: int = 0        # 0 = unlimited; global daily signup ceiling
+    SIGNUPS_PER_DAY_GLOBAL: int = 0  # 0 = unlimited; global daily signup ceiling
 
     ENVIRONMENT: str = "development"
 
@@ -109,7 +120,7 @@ class Settings(BaseSettings):
         raw = self.DATABASE_URL
         for prefix in ("postgresql+asyncpg://", "postgres://", "postgresql://"):
             if raw.startswith(prefix):
-                raw = "postgresql://" + raw[len(prefix):]
+                raw = "postgresql://" + raw[len(prefix) :]
                 break
         parts = urlsplit(raw)
         return urlunsplit(("postgresql+asyncpg", parts.netloc, parts.path, "", ""))
@@ -118,7 +129,9 @@ class Settings(BaseSettings):
     def db_connect_args(self) -> dict:
         """TLS for managed Postgres (Neon) without breaking local docker
         Postgres. Decided by the raw URL's ``sslmode``."""
-        sslmode = parse_qs(urlsplit(self.DATABASE_URL).query).get("sslmode", [""])[0].lower()
+        sslmode = (
+            parse_qs(urlsplit(self.DATABASE_URL).query).get("sslmode", [""])[0].lower()
+        )
         return {"ssl": True} if sslmode not in ("", "disable", "allow") else {}
 
 

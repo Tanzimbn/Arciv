@@ -1,3 +1,5 @@
+import hashlib
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -144,6 +146,29 @@ async def list_links(
     return result.scalars().all()
 
 
+async def _cached_query_embedding(redis, q: str) -> list[float] | None:
+    """Embed a search query, caching the vector in Redis so repeat/identical
+    searches skip the CPU embed. The cache is a best-effort optimization, never a
+    dependency: when it's disabled (TTL 0) or Redis is down, we just embed."""
+    ttl = settings.SEARCH_EMBED_CACHE_TTL
+    if redis is None or ttl <= 0:
+        return await embed_text(q)
+    key = f"embed:q:{hashlib.sha256(q.encode()).hexdigest()}"
+    try:
+        cached = await redis.get(key)
+        if cached is not None:
+            return json.loads(cached)
+    except Exception:  # Redis hiccup → fall through and embed directly
+        return await embed_text(q)
+    vec = await embed_text(q)
+    if vec is not None:
+        try:
+            await redis.set(key, json.dumps(vec), ex=ttl)
+        except Exception:  # cache write is best-effort; don't fail the search
+            pass
+    return vec
+
+
 @router.get("/search", response_model=list[LinkResponse])
 async def search_links(
     request: Request,
@@ -173,7 +198,9 @@ async def search_links(
         window=60,
         detail=f"Search rate limit exceeded: {settings.SEARCH_PER_MINUTE} per minute.",
     )
-    vec = await embed_text(q)
+    vec = await _cached_query_embedding(
+        getattr(request.app.state, "arq_pool", None), q
+    )
     if vec is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
