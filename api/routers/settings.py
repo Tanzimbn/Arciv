@@ -9,7 +9,7 @@ from api.database import get_db
 from api.middleware.auth import get_current_user
 from api.models.user import User
 from api.schemas.settings import AITestResult, SettingsResponse, SettingsUpdate
-from api.utils.encryption import decrypt_value, encrypt_value, mask_api_key
+from api.utils.encryption import decrypt_secret, encrypt_secret, mask_api_key
 from api.utils.username import validate_username
 
 router = APIRouter()
@@ -19,7 +19,7 @@ def _build_response(user: User) -> SettingsResponse:
     masked = None
     if user.ai_api_key_enc:
         try:
-            raw = decrypt_value(user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+            raw = decrypt_secret(user.ai_api_key_enc)
             masked = mask_api_key(raw)
         except Exception:
             masked = "****"
@@ -64,7 +64,7 @@ async def update_settings(
         if body.ai_api_key == "":
             current_user.ai_api_key_enc = None
         else:
-            current_user.ai_api_key_enc = encrypt_value(body.ai_api_key, settings.ENCRYPTION_KEY)
+            current_user.ai_api_key_enc = encrypt_secret(body.ai_api_key)
     if body.feed_notify_telegram is not None:
         current_user.feed_notify_telegram = body.feed_notify_telegram
     if body.feed_notify_inapp is not None:
@@ -82,7 +82,7 @@ async def test_ai_connection(current_user: User = Depends(get_current_user)):
     using_shared_fallback = False
     if current_user.ai_api_key_enc:
         try:
-            api_key = decrypt_value(current_user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+            api_key = decrypt_secret(current_user.ai_api_key_enc)
         except Exception:
             return AITestResult(success=False, message="Failed to decrypt API key.", provider=provider_name)
     elif settings.SHARED_GEMINI_KEY:

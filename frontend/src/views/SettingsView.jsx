@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api/client.js";
+import { api, clearTokens } from "../api/client.js";
 import SubpageNav from "../components/SubpageNav.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
@@ -154,6 +154,11 @@ export default function SettingsView({ onBack }) {
   const [generatingToken, setGeneratingToken] = useState(false);
   const [focused, setFocused] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     api.getSettings().then(s => {
@@ -223,6 +228,29 @@ export default function SettingsView({ onBack }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleExport() {
+    setExporting(true); setError(""); setSuccess("");
+    try {
+      await api.exportData();
+      setSuccess("Export downloaded.");
+    } catch { setError("Failed to export your data."); }
+    finally { setExporting(false); }
+  }
+
+  async function handleDeleteAccount() {
+    if (!deletePassword) { setDeleteError("Enter your password to confirm."); return; }
+    setDeleting(true); setDeleteError("");
+    try {
+      await api.deleteAccount(deletePassword);
+      // Account and all data are gone — drop the session and return to login.
+      clearTokens();
+      window.location.href = "/";
+    } catch (err) {
+      setDeleteError(err?.status === 403 ? "Password is incorrect." : "Failed to delete account.");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
       <SubpageNav onBack={onBack} />
@@ -246,6 +274,7 @@ export default function SettingsView({ onBack }) {
             ))}
           </div>
         ) : (
+          <>
           <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
             {/* Profile */}
@@ -475,8 +504,117 @@ export default function SettingsView({ onBack }) {
               {saving ? "Saving…" : "Save settings"}
             </button>
           </form>
+
+          {/* Danger Zone — outside the form so its buttons never submit it */}
+          <section style={{
+            marginTop: 22, background: "var(--surface)",
+            border: "1.5px solid color-mix(in oklab, var(--bad) 30%, var(--line))",
+            borderRadius: 18, overflow: "hidden", boxShadow: "var(--shadow-card)",
+          }}>
+            <div style={{
+              padding: "14px 20px", borderBottom: "1px solid var(--line-2)",
+              background: "var(--bad-tint)",
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ color: "var(--bad)", display: "flex" }}><I.trash /></span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--bad)", letterSpacing: "-0.01em" }}>Danger Zone</span>
+            </div>
+            <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Export */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", margin: 0 }}>Export my data</p>
+                  <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0", lineHeight: 1.4 }}>Download all your links, feeds, and notifications as a JSON file.</p>
+                </div>
+                <button type="button" onClick={handleExport} disabled={exporting}
+                  style={{
+                    padding: "9px 16px", border: "1.5px solid var(--line)", borderRadius: 10,
+                    fontSize: 13, fontWeight: 600, cursor: exporting ? "default" : "pointer",
+                    background: "var(--surface-2)", color: "var(--ink-2)", whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                  {exporting ? "Exporting…" : "Export data"}
+                </button>
+              </div>
+
+              <div style={{ height: 1, background: "var(--line-2)" }} />
+
+              {/* Delete */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", margin: 0 }}>Delete account</p>
+                  <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0", lineHeight: 1.4 }}>Permanently remove your account and all associated data. This cannot be undone.</p>
+                </div>
+                <button type="button" onClick={() => { setDeleteOpen(true); setDeletePassword(""); setDeleteError(""); }}
+                  style={{
+                    padding: "9px 16px", border: 0, borderRadius: 10,
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    background: "var(--bad)", color: "#fff", whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                  Delete account
+                </button>
+              </div>
+            </div>
+          </section>
+          </>
         )}
       </main>
+
+      {/* Delete confirmation modal */}
+      {deleteOpen && (
+        <div
+          onClick={() => !deleting && setDeleteOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 20,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            width: "100%", maxWidth: 420, background: "var(--surface)",
+            border: "1px solid var(--line)", borderRadius: 16, padding: 24,
+            boxShadow: "0 20px 60px rgba(0,0,0,.3)",
+          }}>
+            <h2 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 26, margin: "0 0 8px", color: "var(--ink)" }}>
+              Delete your account?
+            </h2>
+            <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55, margin: "0 0 18px" }}>
+              This permanently deletes your account and every link, feed, and notification. This action cannot be undone. Enter your password to confirm.
+            </p>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={e => { setDeletePassword(e.target.value); setDeleteError(""); }}
+              placeholder="Your password"
+              autoFocus
+              onKeyDown={e => { if (e.key === "Enter") handleDeleteAccount(); }}
+              style={{
+                width: "100%", border: `1.5px solid ${deleteError ? "var(--bad)" : "var(--line)"}`,
+                borderRadius: 10, padding: "10px 13px", fontSize: 13.5,
+                color: "var(--ink)", background: "var(--surface-2)", outline: "none",
+                boxSizing: "border-box", fontFamily: "inherit",
+              }}
+            />
+            {deleteError && <p style={{ fontSize: 12.5, color: "var(--bad)", fontWeight: 600, margin: "8px 0 0" }}>{deleteError}</p>}
+            <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setDeleteOpen(false)} disabled={deleting}
+                style={{
+                  padding: "9px 16px", border: "1.5px solid var(--line)", borderRadius: 10,
+                  fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
+                  background: "var(--surface-2)", color: "var(--ink-2)",
+                }}>
+                Cancel
+              </button>
+              <button type="button" onClick={handleDeleteAccount} disabled={deleting}
+                style={{
+                  padding: "9px 16px", border: 0, borderRadius: 10,
+                  fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
+                  background: "var(--bad)", color: "#fff",
+                }}>
+                {deleting ? "Deleting…" : "Delete forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

@@ -95,6 +95,34 @@ async function request(method, path, body) {
   return data;
 }
 
+// Download the account export as a JSON file. Bypasses the JSON-parsing
+// `request` wrapper (we need the raw blob + filename), but reuses the same
+// token + single-flight refresh handling.
+async function downloadExport() {
+  let res = await rawRequest("GET", "/account/export", undefined, getToken());
+  if (res.status === 401 && getRefreshToken()) {
+    if (await tryRefresh()) {
+      res = await rawRequest("GET", "/account/export", undefined, getToken());
+    }
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw { status: res.status, data };
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const match = cd.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : "arciv-export.json";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   login: (email, password) =>
     request("POST", "/auth/login", { email, password }),
@@ -140,6 +168,9 @@ export const api = {
   getSettings: () => request("GET", "/settings"),
   updateSettings: (patch) => request("PATCH", "/settings", patch),
   testAI: () => request("POST", "/settings/ai/test"),
+
+  exportData: () => downloadExport(),
+  deleteAccount: (password) => request("DELETE", "/account", { password }),
 
   discoverFeed: (url) => request("POST", "/feeds/discover", { url }),
   subscribeFeed: (body) => request("POST", "/feeds", body),

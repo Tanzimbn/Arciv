@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     RESET_TOKEN_TTL_HOURS: int = 1
 
     ENCRYPTION_KEY: str
+    # Envelope encryption: the active KEK is ENCRYPTION_KEY, labelled by
+    # ENCRYPTION_KEY_ID (embedded in every new blob). To rotate, promote a new
+    # secret to ENCRYPTION_KEY with a fresh id, move the old one into
+    # ENCRYPTION_KEYS_RETIRED ("id:secret,id:secret") so existing blobs still
+    # decrypt, then run scripts/rotate_encryption_key.py to re-wrap under the
+    # new KEK. Retired keys can be dropped once rotation completes.
+    ENCRYPTION_KEY_ID: str = "1"
+    ENCRYPTION_KEYS_RETIRED: str = ""
 
     # Email / SMTP. When EMAIL_ENABLED is false, links are logged instead of sent
     # (local dev without an SMTP server).

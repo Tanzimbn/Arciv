@@ -19,7 +19,7 @@ from agent.prompt import (
 from agent.embedding import embed_text
 from agent.registry import make_provider
 from api.config import settings
-from api.utils.encryption import decrypt_value
+from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
 from api.utils.metadata import canonicalize_url, fetch_article_text, fetch_metadata
 from api.utils.ratelimit import enforce_user_rate_limit
@@ -296,7 +296,7 @@ async def generate_insights(
     provider = None
     if current_user.ai_api_key_enc:
         try:
-            api_key = decrypt_value(current_user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+            api_key = decrypt_secret(current_user.ai_api_key_enc)
             provider = make_provider(current_user.ai_provider, api_key)
         except Exception:
             pass

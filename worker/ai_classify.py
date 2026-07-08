@@ -9,7 +9,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal
 from api.models.link import Link
 from api.models.user import User
-from api.utils.encryption import decrypt_value
+from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
 
 _RETRY_DELAYS = [
@@ -24,7 +24,7 @@ SHARED_DAILY_LIMIT = 20
 async def _get_provider(user: User, redis):
     """Return (provider, provider_name) or (None, None) if no provider available."""
     if user.ai_api_key_enc:
-        api_key = decrypt_value(user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+        api_key = decrypt_secret(user.ai_api_key_enc)
         return make_provider(user.ai_provider, api_key), user.ai_provider
 
     if settings.SHARED_GEMINI_KEY:

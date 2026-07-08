@@ -563,9 +563,9 @@ export default function LoginView({ onLogin }) {
             {isSignup && (
               <p style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, textAlign: "center", maxWidth: 340, margin: "0 auto" }}>
                 By creating an account you agree to our{" "}
-                <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: "var(--line)" }}>Terms</a>
+                <a href="/terms" style={{ color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: "var(--line)" }}>Terms</a>
                 {" "}and{" "}
-                <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: "var(--line)" }}>Privacy Policy</a>.
+                <a href="/privacy" style={{ color: "var(--ink-2)", textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: "var(--line)" }}>Privacy Policy</a>.
                 {" "}We'll never sell your data.
               </p>
             )}
@@ -580,8 +580,8 @@ export default function LoginView({ onLogin }) {
         }}>
           <span>arciv © 2026</span>
           <div style={{ display: "flex", gap: 14 }}>
-            {["Help", "Privacy", "Terms"].map(l => (
-              <a key={l} href="#" style={{ color: "var(--muted)", textDecoration: "none" }}
+            {[{ l: "Privacy", href: "/privacy" }, { l: "Terms", href: "/terms" }].map(({ l, href }) => (
+              <a key={l} href={href} style={{ color: "var(--muted)", textDecoration: "none" }}
                 onMouseEnter={e => { e.currentTarget.style.color = "var(--ink-2)"; }}
                 onMouseLeave={e => { e.currentTarget.style.color = "var(--muted)"; }}
               >{l}</a>

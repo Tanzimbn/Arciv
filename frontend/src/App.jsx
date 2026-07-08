@@ -8,6 +8,7 @@ import VerifyEmailView from "./views/VerifyEmailView.jsx";
 import ForgotPasswordView from "./views/ForgotPasswordView.jsx";
 import ResetPasswordView from "./views/ResetPasswordView.jsx";
 import AdminView from "./views/AdminView.jsx";
+import LegalView from "./views/LegalView.jsx";
 
 function goHome() {
   // Drop token query params / auth paths and return to the SPA root.
@@ -19,6 +20,10 @@ export default function App() {
   const path = window.location.pathname;
   const [token, setToken] = useState(() => getToken());
   const [view, setView] = useState("links");
+
+  // Public pages — reachable without auth.
+  if (path === "/terms") return <LegalView type="terms" />;
+  if (path === "/privacy") return <LegalView type="privacy" />;
 
   // Token-driven pages are reachable without auth (opened from email links).
   if (path === "/verify-email") return <VerifyEmailView onDone={goHome} />;

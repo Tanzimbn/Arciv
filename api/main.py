@@ -13,7 +13,7 @@ from sqlalchemy import text
 from api.config import settings
 from api.database import AsyncSessionLocal
 from api.middleware.analytics import traffic_middleware
-from api.routers import admin, auth, feeds, links, notifications
+from api.routers import account, admin, auth, feeds, links, notifications
 from api.routers import settings as settings_router
 from api.utils.ratelimit import limiter
 
@@ -66,6 +66,7 @@ app.include_router(
     notifications.router, prefix="/api/notifications", tags=["notifications"]
 )
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(account.router, prefix="/api/account", tags=["account"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram
