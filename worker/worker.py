@@ -1,6 +1,7 @@
 from arq import cron
 from arq.connections import RedisSettings
 
+from agent.embedding import warm_model
 from api.config import settings
 from worker.ai_classify import classify_link, sweep_failed_links
 from worker.email import send_email_job
@@ -26,8 +27,15 @@ if settings.TELEGRAM_ENABLED:
     _cron_jobs.append(cron(send_daily_digest, hour={9}, minute=0))  # Daily at 9:00 UTC
 
 
+async def _on_startup(ctx) -> None:
+    # Warm the embedding model before jobs run so the first embed_link doesn't
+    # eat model load time inside a job's timeout. No-op if embeddings disabled.
+    warm_model()
+
+
 class WorkerSettings:
     functions = _functions
+    on_startup = _on_startup
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     cron_jobs = _cron_jobs
     max_jobs = 10

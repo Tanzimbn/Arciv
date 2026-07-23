@@ -1,8 +1,10 @@
+import hashlib
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_db
@@ -19,9 +21,10 @@ from agent.prompt import (
 from agent.embedding import embed_text
 from agent.registry import make_provider
 from api.config import settings
-from api.utils.encryption import decrypt_value
+from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
 from api.utils.metadata import canonicalize_url, fetch_article_text, fetch_metadata
+from api.utils.ratelimit import enforce_user_rate_limit
 
 router = APIRouter()
 
@@ -58,16 +61,23 @@ async def create_link(
         )
 
     arq_pool = getattr(request.app.state, "arq_pool", None)
-    if arq_pool is not None:
-        hour_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
-        rate_key = f"rate:links:{current_user.id}:{hour_key}"
-        count = await arq_pool.incr(rate_key)
-        if count == 1:
-            await arq_pool.expire(rate_key, 3600)
-        if count > 30:
+    await enforce_user_rate_limit(
+        arq_pool,
+        scope="links",
+        user_id=current_user.id,
+        limit=settings.LINKS_CREATE_PER_MINUTE,
+        window=60,
+        detail=f"Too fast — max {settings.LINKS_CREATE_PER_MINUTE} links per minute. Try again in a moment.",
+    )
+
+    if settings.MAX_LINKS_PER_USER > 0:
+        link_count = await db.scalar(
+            select(func.count()).select_from(Link).where(Link.user_id == current_user.id)
+        )
+        if link_count >= settings.MAX_LINKS_PER_USER:
             raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded: 30 links per hour.",
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Link limit reached ({settings.MAX_LINKS_PER_USER}). Delete some to add more.",
             )
 
     meta = await fetch_metadata(canonical)
@@ -136,8 +146,32 @@ async def list_links(
     return result.scalars().all()
 
 
+async def _cached_query_embedding(redis, q: str) -> list[float] | None:
+    """Embed a search query, caching the vector in Redis so repeat/identical
+    searches skip the CPU embed. The cache is a best-effort optimization, never a
+    dependency: when it's disabled (TTL 0) or Redis is down, we just embed."""
+    ttl = settings.SEARCH_EMBED_CACHE_TTL
+    if redis is None or ttl <= 0:
+        return await embed_text(q)
+    key = f"embed:q:{hashlib.sha256(q.encode()).hexdigest()}"
+    try:
+        cached = await redis.get(key)
+        if cached is not None:
+            return json.loads(cached)
+    except Exception:  # Redis hiccup → fall through and embed directly
+        return await embed_text(q)
+    vec = await embed_text(q)
+    if vec is not None:
+        try:
+            await redis.set(key, json.dumps(vec), ex=ttl)
+        except Exception:  # cache write is best-effort; don't fail the search
+            pass
+    return vec
+
+
 @router.get("/search", response_model=list[LinkResponse])
 async def search_links(
+    request: Request,
     q: str = Query(..., min_length=1),
     limit: int = Query(30, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -154,7 +188,19 @@ async def search_links(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Semantic search is disabled.",
         )
-    vec = await embed_text(q)
+    # Rate-limit before embedding — each query runs a CPU embedding, so this
+    # is the DoS-sensitive path. Reject over-limit callers before that work.
+    await enforce_user_rate_limit(
+        getattr(request.app.state, "arq_pool", None),
+        scope="search",
+        user_id=current_user.id,
+        limit=settings.SEARCH_PER_MINUTE,
+        window=60,
+        detail=f"Search rate limit exceeded: {settings.SEARCH_PER_MINUTE} per minute.",
+    )
+    vec = await _cached_query_embedding(
+        getattr(request.app.state, "arq_pool", None), q
+    )
     if vec is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -253,9 +299,19 @@ async def retry_ai(
 @router.post("/{link_id}/insights", response_model=LinkResponse)
 async def generate_insights(
     link_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await enforce_user_rate_limit(
+        getattr(request.app.state, "arq_pool", None),
+        scope="insights",
+        user_id=current_user.id,
+        limit=settings.INSIGHTS_PER_MINUTE,
+        window=60,
+        detail=f"Too fast — max {settings.INSIGHTS_PER_MINUTE} insight requests per minute. Try again in a moment.",
+    )
+
     result = await db.execute(
         select(Link).where(Link.id == link_id, Link.user_id == current_user.id)
     )
@@ -267,7 +323,7 @@ async def generate_insights(
     provider = None
     if current_user.ai_api_key_enc:
         try:
-            api_key = decrypt_value(current_user.ai_api_key_enc, settings.ENCRYPTION_KEY)
+            api_key = decrypt_secret(current_user.ai_api_key_enc)
             provider = make_provider(current_user.ai_provider, api_key)
         except Exception:
             pass

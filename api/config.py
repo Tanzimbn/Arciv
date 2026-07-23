@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     RESET_TOKEN_TTL_HOURS: int = 1
 
     ENCRYPTION_KEY: str
+    # Envelope encryption: the active KEK is ENCRYPTION_KEY, labelled by
+    # ENCRYPTION_KEY_ID (embedded in every new blob). To rotate, promote a new
+    # secret to ENCRYPTION_KEY with a fresh id, move the old one into
+    # ENCRYPTION_KEYS_RETIRED ("id:secret,id:secret") so existing blobs still
+    # decrypt, then run scripts/rotate_encryption_key.py to re-wrap under the
+    # new KEK. Retired keys can be dropped once rotation completes.
+    ENCRYPTION_KEY_ID: str = "1"
+    ENCRYPTION_KEYS_RETIRED: str = ""
 
     # Email / SMTP. When EMAIL_ENABLED is false, links are logged instead of sent
     # (local dev without an SMTP server).
@@ -58,8 +66,43 @@ class Settings(BaseSettings):
     # into migration 0012 (Vector(384)). A different-dim model needs a new
     # migration — keep this in sync with the column.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    # Cap on simultaneous in-process embeddings (fastembed is CPU-bound: even
+    # though inference runs off the event loop, N parallel embeds saturate every
+    # core and starve request handling). Keep this <= cores-1 so the event-loop
+    # thread always has a core. Applies per process, so it globally bounds embed
+    # load on a single-box deploy (api + worker each get their own cap). Raise it
+    # on a bigger host. Applies only in local mode; when EMBED_SERVICE_URL is set
+    # the embed service enforces its own concurrency cap instead.
+    EMBEDDING_MAX_CONCURRENCY: int = 2
+    # Cache search-query vectors in Redis so repeated/identical searches skip the
+    # CPU embed entirely. TTL in seconds; 0 disables the cache.
+    SEARCH_EMBED_CACHE_TTL: int = 180
+    # When set (e.g. http://embed:8001), embed_text() calls this dedicated
+    # embedding microservice over HTTP instead of loading the ONNX model
+    # in-process. Lets the api + worker shed the model (~400MB each) so they fit
+    # low-RAM hosts; the model then lives in ONE place. Empty (default) = local
+    # in-process model — unchanged single-container behavior.
+    EMBED_SERVICE_URL: str = ""
 
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
+
+    # Public-launch abuse/DoS guards. All default to "off" (0 / False) so
+    # self-hosting stays unrestricted; a hosted deployment sets real ceilings.
+    # Per-user rate limits (fixed-window Redis counters keyed by user_id).
+    # These are burst/anti-spam guards, NOT usage caps: AI is BYO-key, so the
+    # per-call cost falls on the user, not the operator. The only thing worth
+    # protecting is the server (outbound fetches, request workers, queue depth),
+    # so limits are per-MINUTE — high enough that no human hits them, low enough
+    # to stop a script hammering the box.
+    LINKS_CREATE_PER_MINUTE: int = 20  # POST /api/links (metadata fetch + enqueue)
+    SEARCH_PER_MINUTE: int = 30  # GET /api/links/search (each call embeds q)
+    INSIGHTS_PER_MINUTE: int = 10  # POST /api/links/:id/insights (inline LLM call)
+    # Per-user resource quotas (0 = unlimited):
+    MAX_LINKS_PER_USER: int = 0
+    MAX_FEEDS_PER_USER: int = 0
+    # Registration-abuse controls:
+    BLOCK_DISPOSABLE_EMAILS: bool = False  # reject known throwaway email domains
+    SIGNUPS_PER_DAY_GLOBAL: int = 0  # 0 = unlimited; global daily signup ceiling
 
     ENVIRONMENT: str = "development"
 
@@ -88,7 +131,7 @@ class Settings(BaseSettings):
         raw = self.DATABASE_URL
         for prefix in ("postgresql+asyncpg://", "postgres://", "postgresql://"):
             if raw.startswith(prefix):
-                raw = "postgresql://" + raw[len(prefix):]
+                raw = "postgresql://" + raw[len(prefix) :]
                 break
         parts = urlsplit(raw)
         return urlunsplit(("postgresql+asyncpg", parts.netloc, parts.path, "", ""))
@@ -97,7 +140,9 @@ class Settings(BaseSettings):
     def db_connect_args(self) -> dict:
         """TLS for managed Postgres (Neon) without breaking local docker
         Postgres. Decided by the raw URL's ``sslmode``."""
-        sslmode = parse_qs(urlsplit(self.DATABASE_URL).query).get("sslmode", [""])[0].lower()
+        sslmode = (
+            parse_qs(urlsplit(self.DATABASE_URL).query).get("sslmode", [""])[0].lower()
+        )
         return {"ssl": True} if sslmode not in ("", "disable", "allow") else {}
 
 

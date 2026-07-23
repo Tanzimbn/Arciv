@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api/client.js";
+import { api, errMessage } from "../api/client.js";
 import LinkCard from "../components/LinkCard.jsx";
 import LinkDetailDrawer from "../components/LinkDetailDrawer.jsx";
 import NotificationBell from "../components/NotificationBell.jsx";
@@ -359,6 +359,10 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     } catch (err) {
       if (err.status === 409) {
         setSaveError(err.data?.detail?.message ?? "Already saved.");
+      } else if (err.status === 429) {
+        // Rate limited — surface the backend's "max N per minute" detail so the
+        // user knows to slow down, not that the save is broken.
+        setSaveError(errMessage(err, "Too many requests — slow down a moment."));
       } else {
         setSaveError("Failed to save link.");
       }

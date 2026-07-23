@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { api } from "../api/client.js";
+import { api, errMessage } from "../api/client.js";
 
 // ── Constants ─────────────────────────────────────────────────
 const QUEUE_OPTIONS = [
@@ -73,6 +73,12 @@ function CustomSelect({ value, options, onChange, renderTrigger }) {
 const VIDEO_HOSTS = /youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|twitch\.tv/i;
 
 function insightsErrorMessage(err, link) {
+  if (err?.status === 429) {
+    // Rate limited — surface the backend's "max N per minute" detail. Must come
+    // before the content-type guesses below, which would otherwise mislabel a
+    // throttle as a paywall/JS problem.
+    return errMessage(err, "Too many insight requests — try again in a minute.");
+  }
   if (err?.status === 422) {
     return "No AI provider configured, add an API key in Settings.";
   }

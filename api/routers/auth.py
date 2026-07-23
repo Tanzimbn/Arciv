@@ -22,6 +22,7 @@ from api.schemas.auth import (
     UserResponse,
     VerifyEmailRequest,
 )
+from api.utils.disposable_email import is_disposable
 from api.utils.ratelimit import limiter
 from api.utils.security import hash_password, verify_password
 from api.utils.tokens import (
@@ -77,11 +78,33 @@ async def _issue_token_pair(db: AsyncSession, user: User, request: Request) -> T
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/hour")
 async def register(body: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    if settings.BLOCK_DISPOSABLE_EMAILS and is_disposable(body.email):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Please use a permanent email address.",
+        )
+
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
+
+    # Global daily signup ceiling — a backstop against mass automated signup
+    # that rotating IPs slip past the per-IP "3/hour" limit above.
+    if settings.SIGNUPS_PER_DAY_GLOBAL > 0:
+        pool = getattr(request.app.state, "arq_pool", None)
+        if pool is not None:
+            day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            signup_key = f"signups:{day}"
+            count = await pool.incr(signup_key)
+            if count == 1:
+                await pool.expire(signup_key, 86400)
+            if count > settings.SIGNUPS_PER_DAY_GLOBAL:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Sign-ups are temporarily closed. Please try again tomorrow.",
+                )
 
     # Generate unique username, retry up to 5 times on collision
     username = None

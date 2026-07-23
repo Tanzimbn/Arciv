@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,8 +13,9 @@ from sqlalchemy import text
 
 from api.config import settings
 from api.database import AsyncSessionLocal
+from agent.embedding import warm_model
 from api.middleware.analytics import traffic_middleware
-from api.routers import admin, auth, feeds, links, notifications
+from api.routers import account, admin, auth, feeds, links, notifications
 from api.routers import settings as settings_router
 from api.utils.ratelimit import limiter
 
@@ -24,6 +26,9 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 async def lifespan(app: FastAPI):
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     app.state.analytics_redis = aioredis.from_url(settings.REDIS_URL)
+    # Load the embedding model now (off the loop) so the first search doesn't pay
+    # model download+load latency mid-request. No-op when embeddings are disabled.
+    await asyncio.to_thread(warm_model)
     yield
     await app.state.arq_pool.aclose()
     await app.state.analytics_redis.aclose()
@@ -66,6 +71,7 @@ app.include_router(
     notifications.router, prefix="/api/notifications", tags=["notifications"]
 )
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(account.router, prefix="/api/account", tags=["account"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram
