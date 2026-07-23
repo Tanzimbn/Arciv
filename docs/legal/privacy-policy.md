@@ -1,12 +1,17 @@
 # Privacy Policy
 
-**Effective date:** _{{EFFECTIVE_DATE}}_
-**Operator:** _{{OPERATOR_LEGAL_NAME}}_ ("we", "us")
-**Contact:** _{{CONTACT_EMAIL}}_
+This policy is effective as of the date you create an account or first use this
+instance of the Service, whichever is earlier.
 
-> **Template.** This is a starting point for the hosted deployment of Arciv, not
-> legal advice. Fill in every `{{PLACEHOLDER}}`, adjust to your jurisdiction and
-> applicable law (e.g. GDPR/CCPA), and have it reviewed before publishing.
+In this policy, **"the Service"** means this Arciv instance and **"the Operator"**
+(**"we"**, **"us"**) means the individual or entity that runs it. Contact the
+Operator at the address published on this instance (shown in the site footer or
+Settings). If you self-host, you are the Operator of your own instance.
+
+> This is a general-purpose template that ships with Arciv, not legal advice. It
+> aims to be accurate to how the software works, but the Operator is responsible
+> for ensuring it fits their obligations (e.g. GDPR/CCPA) and should seek a legal
+> review before relying on it.
 
 ## 1. What we collect
 
@@ -49,7 +54,7 @@ security.
 
 Depending on your jurisdiction you may have rights to access, correct, export,
 or delete your data. Export and deletion are self-serve in Settings; for other
-requests contact _{{CONTACT_EMAIL}}_.
+requests contact the Operator at the address published on this instance.
 
 ## 7. Changes
 

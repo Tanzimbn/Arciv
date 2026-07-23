@@ -71,12 +71,18 @@ class Settings(BaseSettings):
     # core and starve request handling). Keep this <= cores-1 so the event-loop
     # thread always has a core. Applies per process, so it globally bounds embed
     # load on a single-box deploy (api + worker each get their own cap). Raise it
-    # on a bigger host. This module (agent/embedding.py) is the single seam where
-    # a future dedicated embedding service would slot in.
+    # on a bigger host. Applies only in local mode; when EMBED_SERVICE_URL is set
+    # the embed service enforces its own concurrency cap instead.
     EMBEDDING_MAX_CONCURRENCY: int = 2
     # Cache search-query vectors in Redis so repeated/identical searches skip the
     # CPU embed entirely. TTL in seconds; 0 disables the cache.
     SEARCH_EMBED_CACHE_TTL: int = 180
+    # When set (e.g. http://embed:8001), embed_text() calls this dedicated
+    # embedding microservice over HTTP instead of loading the ONNX model
+    # in-process. Lets the api + worker shed the model (~400MB each) so they fit
+    # low-RAM hosts; the model then lives in ONE place. Empty (default) = local
+    # in-process model — unchanged single-container behavior.
+    EMBED_SERVICE_URL: str = ""
 
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 

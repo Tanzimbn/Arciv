@@ -10,18 +10,49 @@ keep settings.EMBEDDING_MODEL on a 384-dim model unless you also migrate.
 """
 
 import asyncio
+import logging
 import threading
 
+import httpx
+
 from api.config import settings
+
+logger = logging.getLogger(__name__)
 
 _model = None
 _lock = threading.Lock()
 
+# Lazy shared async client for remote (EMBED_SERVICE_URL) mode. Generous timeout:
+# a cold embed service pays the model load on its first request.
+_http: httpx.AsyncClient | None = None
+
+
+def _get_http() -> httpx.AsyncClient:
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(timeout=30.0)
+    return _http
+
+
+async def _embed_remote(text: str) -> list[float] | None:
+    """POST the text to the dedicated embedding service and return its vector.
+    Best-effort: on any failure return None (search → 503 → UI substring
+    fallback; worker → skipped, hourly backfill cron retries)."""
+    try:
+        resp = await _get_http().post(
+            f"{settings.EMBED_SERVICE_URL.rstrip('/')}/embed", json={"text": text}
+        )
+        resp.raise_for_status()
+        return resp.json().get("embedding")
+    except Exception:
+        logger.warning("Remote embed service call failed", exc_info=True)
+        return None
+
 # Per-process ceiling on concurrent embeds. Created lazily inside the running
 # loop (import time has none) and cached; api and worker each build their own,
-# which is exactly the global cap on a single-box deploy. `_embed_sync` is the
-# one seam a future dedicated embedding service would replace — swap it for an
-# HTTP call and every call site (worker save, search query) follows for free.
+# which is exactly the global cap on a single-box deploy. Only used in local
+# mode — remote mode (EMBED_SERVICE_URL) offloads to the embed service, whose
+# own semaphore bounds concurrency there instead.
 _semaphore: asyncio.Semaphore | None = None
 
 
@@ -41,8 +72,10 @@ def _get_model():
 
 def warm_model() -> None:
     """Eagerly load the model so the first embed doesn't pay download+load
-    latency mid-request. Safe to call when embeddings are disabled (no-op)."""
-    if settings.EMBEDDINGS_ENABLED:
+    latency mid-request. Safe to call when embeddings are disabled (no-op).
+    Also a no-op in remote mode (EMBED_SERVICE_URL set) — the model lives in the
+    embed service, not this process, which is the whole point of the split."""
+    if settings.EMBEDDINGS_ENABLED and not settings.EMBED_SERVICE_URL:
         _get_model()
 
 
@@ -73,5 +106,8 @@ async def embed_text(text: str | None) -> list[float] | None:
     text = (text or "").strip()
     if not text:
         return None
+    # Remote mode: offload to the dedicated embed service (model not loaded here).
+    if settings.EMBED_SERVICE_URL:
+        return await _embed_remote(text)
     async with _get_semaphore():
         return await asyncio.to_thread(_embed_sync, text)

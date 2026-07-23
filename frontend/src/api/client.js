@@ -95,6 +95,18 @@ async function request(method, path, body) {
   return data;
 }
 
+// In-memory cache for semantic search responses, scoped to this page load. The
+// same query is hit repeatedly (debounced typing settling on a term, blur/focus,
+// tab switches), so caching the whole response skips the round-trip AND the
+// server-side CPU embed. Any link mutation clears it — a stale result set that
+// omits a just-saved link or still shows a deleted one is worse than re-fetching.
+const SEARCH_CACHE_TTL = 60_000; // ms
+const searchCache = new Map(); // `${limit}:${query}` -> { expires, data }
+
+function clearSearchCache() {
+  searchCache.clear();
+}
+
 // Download the account export as a JSON file. Bypasses the JSON-parsing
 // `request` wrapper (we need the raw blob + filename), but reuses the same
 // token + single-flight refresh handling.
@@ -144,8 +156,17 @@ export const api = {
       : Promise.resolve();
   },
 
-  searchLinks: (query, limit = 30) =>
-    request("GET", `/links/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  searchLinks: async (query, limit = 30) => {
+    const key = `${limit}:${query}`;
+    const hit = searchCache.get(key);
+    if (hit && hit.expires > Date.now()) return hit.data;
+    const data = await request(
+      "GET",
+      `/links/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    );
+    searchCache.set(key, { expires: Date.now() + SEARCH_CACHE_TTL, data });
+    return data;
+  },
 
   getLinks: (params = {}) => {
     const qs = new URLSearchParams(
@@ -154,14 +175,34 @@ export const api = {
     return request("GET", `/links${qs ? "?" + qs : ""}`);
   },
 
-  createLink: (url) => request("POST", "/links", { url }),
+  createLink: async (url) => {
+    const r = await request("POST", "/links", { url });
+    clearSearchCache();
+    return r;
+  },
 
-  updateLink: (id, patch) => request("PATCH", `/links/${id}`, patch),
+  updateLink: async (id, patch) => {
+    const r = await request("PATCH", `/links/${id}`, patch);
+    clearSearchCache();
+    return r;
+  },
 
-  deleteLink: (id) => request("DELETE", `/links/${id}`),
+  deleteLink: async (id) => {
+    const r = await request("DELETE", `/links/${id}`);
+    clearSearchCache();
+    return r;
+  },
 
-  retryAI: (id) => request("POST", `/links/${id}/retry-ai`),
-  generateInsights: (id) => request("POST", `/links/${id}/insights`),
+  retryAI: async (id) => {
+    const r = await request("POST", `/links/${id}/retry-ai`);
+    clearSearchCache();
+    return r;
+  },
+  generateInsights: async (id) => {
+    const r = await request("POST", `/links/${id}/insights`);
+    clearSearchCache();
+    return r;
+  },
 
   getMe: () => request("GET", "/auth/me"),
 

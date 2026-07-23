@@ -38,9 +38,27 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Dedicated embedding microservice — loads the ONNX model ONCE; api + worker
+  # call it over HTTP (EMBED_SERVICE_URL below) instead of each loading their own
+  # copy. Mirrors the hosted topology and halves model RAM on a single box.
+  # Its Dockerfile COPYs embed-service/, so the build context is the repo root.
+  embed:
+    build:
+      context: .
+      dockerfile: embed-service/Dockerfile
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
     env_file: .env
+    environment:
+      EMBED_SERVICE_URL: http://embed:8001
     ports:
       - "8000:8000"
     volumes:
@@ -50,6 +68,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      embed:
+        condition: service_started
     command: >
       sh -c "alembic upgrade head &&
              uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -57,6 +77,8 @@ services:
   worker:
     build: .
     env_file: .env
+    environment:
+      EMBED_SERVICE_URL: http://embed:8001
     volumes:
       - .:/app
     depends_on:
@@ -64,6 +86,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      embed:
+        condition: service_started
     command: python -m arq worker.worker.WorkerSettings
 
   # Telegram bot — disabled by default. Enable with TELEGRAM_ENABLED=true in .env
