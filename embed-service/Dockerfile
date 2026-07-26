@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
 # EMBEDDING_MODEL default in app.py.
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5')"
 
-COPY embed-service/ ./
+COPY . ./
 
 # Honour Render/PaaS-injected $PORT; fall back to 8001 for local/compose.
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8001}"]
