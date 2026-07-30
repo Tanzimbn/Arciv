@@ -66,6 +66,30 @@ services:
         sync: false
       - key: TELEGRAM_ENABLED
         value: "false"
+      # Offload embeddings to the arciv-embed service below so this container
+      # (API + worker) never loads the ~400MB ONNX model → stays under 512Mi.
+      # arciv-embed pins PORT=8001, so this internal URL is deterministic.
+      - key: EMBED_SERVICE_URL
+        value: http://arciv-embed:8001
+
+  # Dedicated embedding service — loads the ONNX model ONCE. Minimal image
+  # (fastembed + fastapi only, model baked in). Self-contained build context.
+  - type: web
+    name: arciv-embed
+    runtime: docker
+    dockerfilePath: ./embed-service/Dockerfile
+    dockerContext: ./embed-service
+    branch: dev
+    autoDeploy: true
+    plan: free                       # bump to starter to avoid cold-start sleeps
+    healthCheckPath: /health
+    envVars:
+      # Pin the listen port so arciv's EMBED_SERVICE_URL above is stable. The
+      # Dockerfile CMD honours $PORT (falls back to 8001).
+      - key: PORT
+        value: "8001"
+      - key: EMBEDDING_MAX_CONCURRENCY
+        value: "2"
 
 # ── Scale-up option (paid) ────────────────────────────────────────────────
 # When traffic grows, split the worker out so a slow API request can't starve
@@ -80,7 +104,8 @@ services:
 #     branch: dev
 #     autoDeploy: true
 #     dockerCommand: python -m arq worker.worker.WorkerSettings
-#     envVars: [ same DATABASE_URL / REDIS_URL / SMTP_* / SHARED_GEMINI_KEY ]
+#     envVars: [ same DATABASE_URL / REDIS_URL / SMTP_* / SHARED_GEMINI_KEY,
+#                plus EMBED_SERVICE_URL: http://arciv-embed:8001 ]
 #
 # With a separate worker, move `alembic upgrade head` to the web service's
 # preDeployCommand so migrations still run before traffic shifts. An
