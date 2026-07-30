@@ -41,11 +41,12 @@ services:
   # Dedicated embedding microservice — loads the ONNX model ONCE; api + worker
   # call it over HTTP (EMBED_SERVICE_URL below) instead of each loading their own
   # copy. Mirrors the hosted topology and halves model RAM on a single box.
-  # Its Dockerfile COPYs embed-service/, so the build context is the repo root.
+  # Self-contained build context (the embed-service/ dir) so the same Dockerfile
+  # builds identically here and on Render (Root Directory = embed-service).
   embed:
     build:
-      context: .
-      dockerfile: embed-service/Dockerfile
+      context: ./embed-service
+      dockerfile: Dockerfile
     ports:
       - "8001:8001"
     healthcheck:
