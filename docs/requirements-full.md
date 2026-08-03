@@ -313,7 +313,7 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting).
 
-> **Status (2026-08-03): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile). Remaining before flipping fully public: guided at-signup BYOK onboarding. See the "Public hosted launch" roadmap block in §10 for the per-item state.
+> **Status (2026-08-03): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile), plus guided BYOK onboarding (first-login prompt + banner). All pre-launch items are now shipped. See the "Public hosted launch" roadmap block in §10 for the per-item state.
 
 **NFR-PUB-01 (BYOK)**: Every user brings their own AI provider key, selected from the app's offered providers. The service must run with **zero per-user AI cost to the operator**; the optional shared free-tier key stays capped per user per day.
 
@@ -730,9 +730,9 @@ resurface forgotten-but-relevant items.
 - [x] Key-custody hardening: envelope encryption + `ENCRYPTION_KEY` rotation path — NFR-PUB-05
 - [x] Bounded server-side embedding — NFR-PUB-06: `EMBEDDING_MAX_CONCURRENCY` semaphore + Redis query-embed cache + optional `embed-service/` microservice (`EMBED_SERVICE_URL`)
 - [x] Legal + lifecycle: ToS, privacy policy, data export, account deletion — NFR-PUB-07 (`docs/legal/`, `GET /api/account/export`, `DELETE /api/account`)
-- [~] Provider-key onboarding UX — BYOK works in Settings (provider select + key + test-connection); **guided at-signup onboarding not yet**
+- [x] Provider-key onboarding UX — BYOK in Settings (provider select + key + test-connection) **and** guided onboarding: first-login modal + dismissible banner (`components/ByokOnboarding.jsx`), shown only when the user has no personal key and the instance has no shared key (`SettingsResponse.shared_ai_available`)
 
-**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet. **Met** for the safety layer; the one remaining nicety before a fully public flip is guided at-signup BYOK onboarding.
+**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet. **Met** — the safety layer and guided BYOK onboarding are both shipped; nothing pre-launch remains.
 
 ---
 

@@ -92,7 +92,7 @@ function insightsErrorMessage(err, link) {
 }
 
 // ── Main drawer ───────────────────────────────────────────────
-export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, onRetryAI, onOpenLink }) {
+export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, onRetryAI, onOpenLink, aiAvailable = true }) {
   const [data, setData] = useState(link);
   const open = !!link;
 
@@ -254,8 +254,19 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
     ? { color: "var(--archive)", tint: "var(--archive-tint)", label: "Archive" }
     : (QUEUE_OPTIONS.find(q => q.id === data.queue) ?? QUEUE_OPTIONS[3]);
 
+  // "pending" only means "classifying" when the pipeline can actually run: the
+  // page was fetchable AND an AI provider is available. An unreachable fetch
+  // never enqueues classify, and a keyless user has no provider — in both cases
+  // the link is parked in Inbox, not moments from being classified.
+  const pendingLabel =
+    data.fetch_status === "unreachable"
+      ? { text: "Not classified — couldn't fetch page", cls: "bad" }
+      : !aiAvailable
+        ? { text: "Waiting — add an AI key", cls: "warn" }
+        : { text: "Classifying…", cls: "warn" };
+
   const aiStatusLabel = {
-    pending: { text: "Classifying…", cls: "warn" },
+    pending: pendingLabel,
     done:    { text: "Classified",   cls: "good" },
     skipped: { text: "Skipped",      cls: "" },
     failed:  { text: "Failed",       cls: "bad" },

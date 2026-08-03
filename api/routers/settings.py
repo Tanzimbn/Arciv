@@ -38,6 +38,7 @@ def _build_response(user: User) -> SettingsResponse:
         feed_notify_telegram=user.feed_notify_telegram,
         feed_notify_inapp=user.feed_notify_inapp,
         telegram_enabled=settings.TELEGRAM_ENABLED,
+        shared_ai_available=bool(settings.SHARED_GEMINI_KEY),
     )
 
 

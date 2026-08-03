@@ -8,6 +8,7 @@ class SettingsResponse(BaseModel):
     feed_notify_telegram: bool
     feed_notify_inapp: bool
     telegram_enabled: bool
+    shared_ai_available: bool
 
     model_config = {"from_attributes": True}
 

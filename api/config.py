@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     LINKS_CREATE_PER_MINUTE: int = 20  # POST /api/links (metadata fetch + enqueue)
     SEARCH_PER_MINUTE: int = 30  # GET /api/links/search (each call embeds q)
     INSIGHTS_PER_MINUTE: int = 10  # POST /api/links/:id/insights (inline LLM call)
+    # Auth-route rate limits (per client IP). slowapi rate strings, e.g. "5/minute",
+    # "20/hour". Guard against credential stuffing / signup + email-send abuse.
+    AUTH_REGISTER_RATE_LIMIT: str = "20/hour"
+    AUTH_LOGIN_RATE_LIMIT: str = "5/minute"
+    AUTH_VERIFY_EMAIL_RATE_LIMIT: str = "10/hour"
+    AUTH_RESEND_VERIFICATION_RATE_LIMIT: str = "3/hour"
+    AUTH_FORGOT_PASSWORD_RATE_LIMIT: str = "3/hour"
+    AUTH_RESET_PASSWORD_RATE_LIMIT: str = "10/hour"
     # Per-user resource quotas (0 = unlimited):
     MAX_LINKS_PER_USER: int = 0
     MAX_FEEDS_PER_USER: int = 0
