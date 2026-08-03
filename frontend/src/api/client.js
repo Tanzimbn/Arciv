@@ -139,8 +139,14 @@ export const api = {
   login: (email, password) =>
     request("POST", "/auth/login", { email, password }),
 
-  register: (email, password) =>
-    request("POST", "/auth/register", { email, password }),
+  register: (email, password, captchaToken) =>
+    request("POST", "/auth/register", {
+      email,
+      password,
+      captcha_token: captchaToken,
+    }),
+
+  getConfig: () => request("GET", "/config"),
 
   verifyEmail: (token) => request("POST", "/auth/verify-email", { token }),
   resendVerification: (email) =>
@@ -203,10 +209,13 @@ export const api = {
     clearSearchCache();
     return r;
   },
+  getSimilar: (id, limit = 5) =>
+    request("GET", `/links/${id}/similar?limit=${limit}`),
 
   getMe: () => request("GET", "/auth/me"),
 
   getSettings: () => request("GET", "/settings"),
+  getUsage: () => request("GET", "/settings/usage"),
   updateSettings: (patch) => request("PATCH", "/settings", patch),
   testAI: () => request("POST", "/settings/ai/test"),
 

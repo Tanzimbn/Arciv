@@ -28,6 +28,12 @@ class User(Base):
     feed_notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
     feed_notify_inapp: Mapped[bool] = mapped_column(Boolean, default=True)
     username: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
+    # Running approx byte total of this user's persisted content (see
+    # api/utils/storage.py). Maintained by deltas at every link mutation site and
+    # enforced against MAX_STORAGE_BYTES_PER_USER at link-create.
+    storage_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     links: Mapped[list["Link"]] = relationship("Link", back_populates="user")

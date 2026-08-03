@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,8 +7,16 @@ from agent.registry import VALID_PROVIDERS, make_provider
 from api.config import settings
 from api.database import get_db
 from api.middleware.auth import get_current_user
+from api.models.feed import Feed
+from api.models.link import Link
 from api.models.user import User
-from api.schemas.settings import AITestResult, SettingsResponse, SettingsUpdate
+from api.schemas.settings import (
+    AITestResult,
+    SettingsResponse,
+    SettingsUpdate,
+    UsageQuota,
+    UsageResponse,
+)
 from api.utils.encryption import decrypt_secret, encrypt_secret, mask_api_key
 from api.utils.username import validate_username
 
@@ -30,12 +38,36 @@ def _build_response(user: User) -> SettingsResponse:
         feed_notify_telegram=user.feed_notify_telegram,
         feed_notify_inapp=user.feed_notify_inapp,
         telegram_enabled=settings.TELEGRAM_ENABLED,
+        shared_ai_available=bool(settings.SHARED_GEMINI_KEY),
     )
 
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(current_user: User = Depends(get_current_user)):
     return _build_response(current_user)
+
+
+@router.get("/usage", response_model=UsageResponse)
+async def get_usage(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Current consumption vs. per-account caps. `limit == 0` means unlimited
+    (self-host default), which the UI renders as no meter."""
+    link_count = await db.scalar(
+        select(func.count()).select_from(Link).where(Link.user_id == current_user.id)
+    )
+    feed_count = await db.scalar(
+        select(func.count()).select_from(Feed).where(Feed.user_id == current_user.id)
+    )
+    return UsageResponse(
+        links=UsageQuota(used=link_count or 0, limit=settings.MAX_LINKS_PER_USER),
+        feeds=UsageQuota(used=feed_count or 0, limit=settings.MAX_FEEDS_PER_USER),
+        storage=UsageQuota(
+            used=current_user.storage_bytes,
+            limit=settings.MAX_STORAGE_BYTES_PER_USER,
+        ),
+    )
 
 
 @router.patch("", response_model=SettingsResponse)

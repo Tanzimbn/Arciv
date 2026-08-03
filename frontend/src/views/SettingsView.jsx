@@ -1,15 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, clearTokens } from "../api/client.js";
 import SubpageNav from "../components/SubpageNav.jsx";
+import { ProviderPicker } from "../components/ProviderPicker.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
-
-const PROVIDERS = [
-  { id: "gemini",    label: "Gemini",    icon: "✦", color: "#1a73e8" },
-  { id: "groq",      label: "Groq",      icon: "⚡", color: "#f55036" },
-  { id: "anthropic", label: "Anthropic", icon: "◈", color: "#cc785c" },
-  { id: "openai",    label: "OpenAI",    icon: "⬡", color: "#10a37f" },
-  { id: "ollama",    label: "Ollama",    icon: "⬢", color: "#6b6964" },
-];
 
 /* ── Icons ────────────────────────────────────────────────── */
 const I = {
@@ -21,7 +14,39 @@ const I = {
   copy:   () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
   trash:  () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>,
   zap:    () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  gauge:  () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 14a2 2 0 0 0 1.8-2.9L12 4"/><path d="M4.6 19a9 9 0 1 1 14.8 0"/></svg>,
 };
+
+/* ── Usage helpers ────────────────────────────────────────── */
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatCount(n) {
+  return n.toLocaleString();
+}
+
+function UsageMeter({ label, used, limit, format }) {
+  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  // Amber past 75%, red past 90% — a heads-up before the hard 403 at the cap.
+  const color = pct >= 90 ? "var(--bad)" : pct >= 75 ? "#d98a00" : "var(--accent)";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{label}</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+          {format(used)} <span style={{ opacity: 0.6 }}>/ {format(limit)}</span>
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 99, background: "var(--surface-2)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: color, transition: "width .3s, background .3s" }} />
+      </div>
+    </div>
+  );
+}
 
 /* ── Section card ─────────────────────────────────────────── */
 function Section({ icon, title, children }) {
@@ -48,33 +73,6 @@ function FieldLabel({ children }) {
   return (
     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
       {children}
-    </div>
-  );
-}
-
-/* ── Provider picker ──────────────────────────────────────── */
-function ProviderPicker({ value, onChange, isMobile }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 3 : 5}, 1fr)`, gap: 8 }}>
-      {PROVIDERS.map(p => {
-        const active = value === p.id;
-        return (
-          <button key={p.id} type="button" onClick={() => onChange(p.id)}
-            style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-              padding: "12px 8px", borderRadius: 12, cursor: "pointer",
-              border: `1.5px solid ${active ? p.color : "var(--line)"}`,
-              background: active ? `color-mix(in oklab, ${p.color} 10%, var(--surface))` : "var(--surface-2)",
-              transition: "border-color .15s, background .15s",
-            }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = "var(--muted-2)"; e.currentTarget.style.background = "var(--surface)"; }}}
-            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.background = "var(--surface-2)"; }}}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1, color: active ? p.color : "var(--muted)" }}>{p.icon}</span>
-            <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? p.color : "var(--muted)", letterSpacing: "0.01em" }}>{p.label}</span>
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -135,6 +133,7 @@ function ToggleRow({ checked, onChange, label, description, last }) {
 export default function SettingsView({ onBack }) {
   const { isMobile } = useBreakpoint();
   const [settings, setSettings] = useState(null);
+  const [usage, setUsage] = useState(null);
   const [provider, setProvider] = useState("gemini");
   const [apiKey, setApiKey] = useState("");
   const [notifyTelegram, setNotifyTelegram] = useState(false);
@@ -169,6 +168,7 @@ export default function SettingsView({ onBack }) {
       setUsernameInput(s.username ?? "");
       setSavedUsername(s.username ?? "");
     });
+    api.getUsage().then(setUsage).catch(() => {});
   }, []);
 
   async function handleSave(e) {
@@ -312,6 +312,25 @@ export default function SettingsView({ onBack }) {
                 </div>
               </div>
             </Section>
+
+            {/* Usage — only shown when this instance enforces a cap (hosted).
+                Self-host leaves all limits at 0, so nothing renders. */}
+            {usage &&
+              (usage.links.limit > 0 || usage.feeds.limit > 0 || usage.storage.limit > 0) && (
+                <Section icon={<I.gauge />} title="Usage">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    {usage.storage.limit > 0 && (
+                      <UsageMeter label="Storage" used={usage.storage.used} limit={usage.storage.limit} format={formatBytes} />
+                    )}
+                    {usage.links.limit > 0 && (
+                      <UsageMeter label="Links" used={usage.links.used} limit={usage.links.limit} format={formatCount} />
+                    )}
+                    {usage.feeds.limit > 0 && (
+                      <UsageMeter label="Feeds" used={usage.feeds.used} limit={usage.feeds.limit} format={formatCount} />
+                    )}
+                  </div>
+                </Section>
+              )}
 
             {/* AI Classification */}
             <Section icon={<I.zap />} title="AI Classification">

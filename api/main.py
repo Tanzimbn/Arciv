@@ -15,7 +15,7 @@ from api.config import settings
 from api.database import AsyncSessionLocal
 from agent.embedding import warm_model
 from api.middleware.analytics import traffic_middleware
-from api.routers import account, admin, auth, feeds, links, notifications
+from api.routers import account, admin, auth, config, feeds, links, notifications
 from api.routers import settings as settings_router
 from api.utils.ratelimit import limiter
 
@@ -72,6 +72,7 @@ app.include_router(
 )
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])
+app.include_router(config.router, prefix="/api/config", tags=["config"])
 
 if settings.TELEGRAM_ENABLED:
     from api.routers import telegram

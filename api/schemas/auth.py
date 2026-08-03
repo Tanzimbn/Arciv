@@ -9,6 +9,7 @@ from api.utils.security import validate_password_strength
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    captcha_token: str | None = None  # Cloudflare Turnstile; required only when enabled
 
     @field_validator("password")
     @classmethod

@@ -28,7 +28,7 @@ function FaviconOrLetter({ url, favColor, letter, size = 14 }) {
   );
 }
 
-export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRetryAI, onOpen }) {
+export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRetryAI, onOpen, aiAvailable = true }) {
   const [hovered, setHovered] = useState(false);
   const { isMobile } = useBreakpoint();
 
@@ -45,6 +45,14 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
   const savedDate = new Date(link.saved_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const isPending = link.ai_status === "pending" || link.ai_status === "processing";
   const isFailed = link.ai_status === "failed";
+  const isUnreachable = link.fetch_status === "unreachable";
+  // A pending link is only genuinely "classifying" when it was fetchable AND an
+  // AI provider is available to this user. Otherwise it's parked in Inbox — an
+  // unreachable fetch never enqueued classify, or a keyless user has no provider
+  // — so the reassuring "usually takes a few seconds" spinner would be a lie.
+  const isClassifying = isPending && !isUnreachable && aiAvailable;
+  // Pending, reachable, but no AI key: waiting on the user, not on the pipeline.
+  const isAwaitingKey = isPending && !isUnreachable && !aiAvailable;
   const summary = link.ai_summary || link.description;
 
   // ── List layout ────────────────────────────────────────────────
@@ -78,7 +86,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
           </span>
 
           {/* Status dot */}
-          {isPending && (
+          {isClassifying && (
             <div style={{ position: "relative", width: 7, height: 7, flexShrink: 0 }}>
               <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)", opacity: 0.4, animation: "arciv-ping 1.4s cubic-bezier(0,0,.2,1) infinite" }} />
               <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)" }} />
@@ -135,7 +143,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         </span>
 
         {/* AI classifying dot */}
-        {isPending && (
+        {isClassifying && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             <div style={{ position: "relative", width: 7, height: 7 }}>
               <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)", opacity: 0.4, animation: "arciv-ping 1.4s cubic-bezier(0,0,.2,1) infinite" }} />
@@ -283,28 +291,39 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         )}
 
         {/* AI status */}
-        {(isPending || isFailed) && (
-          isFailed ? (
-            <span style={{
-              fontSize: 10.5, borderRadius: 99, padding: "2px 8px", alignSelf: "flex-start", fontWeight: 500,
-              color: "var(--read)", background: "var(--read-tint)", border: "1px solid color-mix(in oklab, var(--read) 30%, transparent)",
-            }}>AI failed</span>
-          ) : (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "var(--inbox-tint)", border: "1px solid color-mix(in oklab, var(--inbox) 25%, transparent)",
-              borderRadius: 10, padding: "7px 10px",
-            }}>
-              <div style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
-                <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)", opacity: 0.4, animation: "arciv-ping 1.4s cubic-bezier(0,0,.2,1) infinite" }} />
-                <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)" }} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--inbox)", lineHeight: 1 }}>AI is classifying this link</span>
-                <span style={{ fontSize: 10.5, color: "var(--muted)", lineHeight: 1.3 }}>Summarising and routing to the right queue — usually takes a few seconds.</span>
-              </div>
+        {isFailed && (
+          <span style={{
+            fontSize: 10.5, borderRadius: 99, padding: "2px 8px", alignSelf: "flex-start", fontWeight: 500,
+            color: "var(--read)", background: "var(--read-tint)", border: "1px solid color-mix(in oklab, var(--read) 30%, transparent)",
+          }}>AI failed</span>
+        )}
+        {isClassifying && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "var(--inbox-tint)", border: "1px solid color-mix(in oklab, var(--inbox) 25%, transparent)",
+            borderRadius: 10, padding: "7px 10px",
+          }}>
+            <div style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
+              <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)", opacity: 0.4, animation: "arciv-ping 1.4s cubic-bezier(0,0,.2,1) infinite" }} />
+              <span style={{ position: "absolute", inset: 0, borderRadius: 99, background: "var(--inbox)" }} />
             </div>
-          )
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--inbox)", lineHeight: 1 }}>AI is classifying this link</span>
+              <span style={{ fontSize: 10.5, color: "var(--muted)", lineHeight: 1.3 }}>Summarising and routing to the right queue — usually takes a few seconds.</span>
+            </div>
+          </div>
+        )}
+        {isAwaitingKey && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "var(--inbox-tint)", border: "1px solid color-mix(in oklab, var(--inbox) 25%, transparent)",
+            borderRadius: 10, padding: "7px 10px",
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--inbox)", lineHeight: 1 }}>Saved to Inbox</span>
+              <span style={{ fontSize: 10.5, color: "var(--muted)", lineHeight: 1.3 }}>Add an AI key in Settings to auto-summarise and route this link.</span>
+            </div>
+          </div>
         )}
 
         {/* Tags */}
