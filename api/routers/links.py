@@ -217,6 +217,45 @@ async def search_links(
     return result.scalars().all()
 
 
+@router.get("/{link_id}/similar", response_model=list[LinkResponse])
+async def similar_links(
+    link_id: uuid.UUID,
+    limit: int = Query(5, ge=1, le=20),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top-N links semantically closest to this one, by embedding cosine distance.
+
+    User-scoped. Returns [] (not an error) when embeddings are disabled or the
+    source link has no embedding yet, so the drawer can simply hide the panel.
+    No query embedding runs here — we reuse the source link's stored vector — so
+    this is cheap and not rate-limited like /search.
+    """
+    result = await db.execute(
+        select(Link).where(Link.id == link_id, Link.user_id == current_user.id)
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    if not settings.EMBEDDINGS_ENABLED or link.embedding is None:
+        return []
+
+    stmt = (
+        select(Link)
+        .where(
+            Link.user_id == current_user.id,
+            Link.id != link_id,
+            Link.status == "active",
+            Link.embedding.is_not(None),
+        )
+        .order_by(Link.embedding.cosine_distance(link.embedding))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
 @router.patch("/{link_id}", response_model=LinkResponse)
 async def update_link(
     link_id: uuid.UUID,

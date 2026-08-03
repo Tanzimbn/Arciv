@@ -790,6 +790,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         onUpdate={handleLinkUpdate}
         onDelete={handleLinkDelete}
         onRetryAI={handleLinkRetryAI}
+        onOpenLink={setSelectedLink}
       />
     </div>
   );

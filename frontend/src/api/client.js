@@ -203,6 +203,8 @@ export const api = {
     clearSearchCache();
     return r;
   },
+  getSimilar: (id, limit = 5) =>
+    request("GET", `/links/${id}/similar?limit=${limit}`),
 
   getMe: () => request("GET", "/auth/me"),
 

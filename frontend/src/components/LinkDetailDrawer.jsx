@@ -92,9 +92,14 @@ function insightsErrorMessage(err, link) {
 }
 
 // ── Main drawer ───────────────────────────────────────────────
-export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, onRetryAI }) {
+export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, onRetryAI, onOpenLink }) {
   const [data, setData] = useState(link);
   const open = !!link;
+
+  // Semantically related links (embedding cosine distance). Best-effort: any
+  // failure or empty result just hides the panel.
+  const [related, setRelated] = useState([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
 
   // Local editable state
   const [notes, setNotes] = useState(data?.notes ?? "");
@@ -130,6 +135,19 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
     clearTimeout(notesTimerRef.current);
     clearTimeout(savedTimerRef.current);
   }, []);
+
+  // Fetch related links whenever the open link changes.
+  useEffect(() => {
+    if (!link) return;
+    let cancelled = false;
+    setRelated([]);
+    setRelatedLoading(true);
+    api.getSimilar(link.id)
+      .then(items => { if (!cancelled) setRelated(items || []); })
+      .catch(() => { if (!cancelled) setRelated([]); })
+      .finally(() => { if (!cancelled) setRelatedLoading(false); });
+    return () => { cancelled = true; };
+  }, [link]);
 
   // Esc to close
   useEffect(() => {
@@ -418,6 +436,44 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
               />
             </div>
           </section>
+
+          {/* Related */}
+          {(relatedLoading || related.length > 0) && (
+            <section className="ldr-section">
+              <div className="ldr-section-h">
+                <div className="ldr-section-label">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  Related
+                </div>
+              </div>
+              {relatedLoading ? (
+                <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>Finding related links…</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {related.map(r => {
+                    let rd = r.canonical_url;
+                    try { rd = new URL(r.canonical_url).hostname.replace(/^www\./, ""); } catch {}
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => onOpenLink?.(r)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface-2)", cursor: "pointer" }}
+                      >
+                        {r.favicon_url
+                          ? <img src={r.favicon_url} alt="" width={22} height={22} style={{ flex: "0 0 auto", borderRadius: 6, objectFit: "contain" }} onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "grid"; }} />
+                          : null}
+                        <span style={{ flex: "0 0 auto", width: 22, height: 22, borderRadius: 6, display: r.favicon_url ? "none" : "grid", placeItems: "center", background: domainColor(rd), color: "#fff", fontSize: 11, fontWeight: 700 }}>{rd[0]?.toUpperCase() ?? "?"}</span>
+                        <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 550, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title || rd}</span>
+                          <span style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rd}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Classification */}
           <section className="ldr-section">
