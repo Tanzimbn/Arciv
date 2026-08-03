@@ -24,3 +24,14 @@ class AITestResult(BaseModel):
     success: bool
     message: str
     provider: str
+
+
+class UsageQuota(BaseModel):
+    used: int
+    limit: int  # 0 = unlimited
+
+
+class UsageResponse(BaseModel):
+    links: UsageQuota
+    feeds: UsageQuota
+    storage: UsageQuota  # bytes

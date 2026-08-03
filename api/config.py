@@ -100,9 +100,17 @@ class Settings(BaseSettings):
     # Per-user resource quotas (0 = unlimited):
     MAX_LINKS_PER_USER: int = 0
     MAX_FEEDS_PER_USER: int = 0
+    # Approx bytes of persisted content a user may accumulate (0 = unlimited).
+    # Maintained as a running total on users.storage_bytes; enforced (soft) at
+    # link-create. See api/utils/storage.py.
+    MAX_STORAGE_BYTES_PER_USER: int = 0
     # Registration-abuse controls:
     BLOCK_DISPOSABLE_EMAILS: bool = False  # reject known throwaway email domains
     SIGNUPS_PER_DAY_GLOBAL: int = 0  # 0 = unlimited; global daily signup ceiling
+    # Cloudflare Turnstile captcha on signup. Empty secret = disabled (self-host
+    # default); the site key is public and served to the SPA via GET /api/config.
+    TURNSTILE_SECRET_KEY: str = ""
+    TURNSTILE_SITE_KEY: str = ""
 
     ENVIRONMENT: str = "development"
 

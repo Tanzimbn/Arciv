@@ -22,9 +22,12 @@ from api.schemas.auth import (
     UserResponse,
     VerifyEmailRequest,
 )
+from slowapi.util import get_remote_address
+
 from api.utils.disposable_email import is_disposable
 from api.utils.ratelimit import limiter
 from api.utils.security import hash_password, verify_password
+from api.utils.turnstile import verify_turnstile
 from api.utils.tokens import (
     consume_email_token,
     create_refresh_token,
@@ -78,6 +81,12 @@ async def _issue_token_pair(db: AsyncSession, user: User, request: Request) -> T
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/hour")
 async def register(body: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    if not await verify_turnstile(body.captcha_token, get_remote_address(request)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Captcha verification failed. Please try again.",
+        )
+
     if settings.BLOCK_DISPOSABLE_EMAILS and is_disposable(body.email):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

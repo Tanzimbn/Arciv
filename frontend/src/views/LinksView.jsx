@@ -324,9 +324,11 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     }).length;
   }, [allLinks]);
 
-  function showToast(msg, color) {
+  const toastTimer = useRef(null);
+  function showToast(msg, color, duration = 2200) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, color });
-    setTimeout(() => setToast(null), 2200);
+    toastTimer.current = setTimeout(() => setToast(null), duration);
   }
 
   function commitSaved() {
@@ -358,11 +360,16 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       commitSaved();
     } catch (err) {
       if (err.status === 409) {
+        // Dedup is specific to the URL just typed — inline by the input fits.
         setSaveError(err.data?.detail?.message ?? "Already saved.");
+      } else if (err.status === 403) {
+        // Account-level quota (storage / link count). Surface the backend's
+        // actionable detail as a prominent, longer-lived red toast — the inline
+        // "Failed to save link" was ambiguous about the real cause + the fix.
+        showToast(errMessage(err, "Storage or link limit reached."), "var(--bad)", 5200);
       } else if (err.status === 429) {
-        // Rate limited — surface the backend's "max N per minute" detail so the
-        // user knows to slow down, not that the save is broken.
-        setSaveError(errMessage(err, "Too many requests — slow down a moment."));
+        // Rate limited — same treatment: a toast, not a "broken save" message.
+        showToast(errMessage(err, "Too many requests — slow down a moment."), "var(--bad)", 4200);
       } else {
         setSaveError("Failed to save link.");
       }

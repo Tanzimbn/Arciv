@@ -1,6 +1,57 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errMessage } from "../api/client.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
+
+// ── Cloudflare Turnstile ───────────────────────────────────────
+// Explicit-render so the widget only mounts on the signup form (not login) and
+// can be torn down / reset on failure. Script is loaded once, lazily.
+let turnstileScriptPromise = null;
+function loadTurnstile() {
+  if (typeof window === "undefined") return Promise.reject();
+  if (window.turnstile) return Promise.resolve();
+  if (!turnstileScriptPromise) {
+    turnstileScriptPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true;
+      s.defer = true;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  return turnstileScriptPromise;
+}
+
+function TurnstileWidget({ siteKey, onToken }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let widgetId;
+    let cancelled = false;
+    loadTurnstile()
+      .then(() => {
+        if (cancelled || !ref.current || !window.turnstile) return;
+        widgetId = window.turnstile.render(ref.current, {
+          sitekey: siteKey,
+          callback: (t) => onToken(t),
+          "expired-callback": () => onToken(""),
+          "error-callback": () => onToken(""),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (widgetId && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetId);
+        } catch {
+          /* already gone */
+        }
+      }
+    };
+  }, [siteKey, onToken]);
+  return <div ref={ref} style={{ display: "flex", justifyContent: "center" }} />;
+}
 
 // ── Icons ──────────────────────────────────────────────────────
 const MailIcon = () => (
@@ -312,7 +363,23 @@ export default function LoginView({ onLogin }) {
   const [needsVerify, setNeedsVerify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [arrowHovered, setArrowHovered] = useState(false);
+  const [captcha, setCaptcha] = useState({ enabled: false, siteKey: "" });
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaKey, setCaptchaKey] = useState(0); // bump to force a fresh widget
   const { width } = useBreakpoint();
+
+  // Public runtime config — tells us whether signup captcha is on and its site key.
+  useEffect(() => {
+    api
+      .getConfig()
+      .then((cfg) =>
+        setCaptcha({
+          enabled: !!cfg.signup_captcha_enabled,
+          siteKey: cfg.turnstile_site_key || "",
+        })
+      )
+      .catch(() => {});
+  }, []);
 
   const isSignup = mode === "register";
   const isNarrow = width < 960;
@@ -323,8 +390,11 @@ export default function LoginView({ onLogin }) {
     /[A-Z]/.test(password) &&
     /[a-z]/.test(password) &&
     /[0-9]/.test(password);
+  const captchaNeeded = isSignup && captcha.enabled && !!captcha.siteKey;
   const canSubmit =
-    email.trim().includes("@") && (isSignup ? strongPassword : password.length >= 1);
+    email.trim().includes("@") &&
+    (isSignup ? strongPassword : password.length >= 1) &&
+    (!captchaNeeded || !!captchaToken);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -334,7 +404,7 @@ export default function LoginView({ onLogin }) {
     setLoading(true);
     try {
       if (isSignup) {
-        const data = await api.register(email, password);
+        const data = await api.register(email, password, captchaToken);
         // Block-until-verified: no token yet — prompt the user to check email.
         setNotice(data.message || "Check your email to verify your account before signing in.");
       } else {
@@ -342,6 +412,12 @@ export default function LoginView({ onLogin }) {
         onLogin(data); // { access_token, refresh_token, ... }
       }
     } catch (err) {
+      // A Turnstile token is single-use — a rejected signup burned it, so mint a
+      // fresh widget before the user retries.
+      if (captchaNeeded) {
+        setCaptchaToken("");
+        setCaptchaKey((k) => k + 1);
+      }
       if (err.status === 403) {
         setNeedsVerify(true);
         setError(errMessage(err, "Email not verified."));
@@ -371,6 +447,8 @@ export default function LoginView({ onLogin }) {
     setNotice("");
     setNeedsVerify(false);
     setPassword("");
+    setCaptchaToken("");
+    setCaptchaKey((k) => k + 1);
   }
 
   return (
@@ -510,6 +588,16 @@ export default function LoginView({ onLogin }) {
 
             {/* Strength meter (signup only) */}
             {isSignup && <StrengthMeter password={password} />}
+
+            {captchaNeeded && (
+              <div style={{ marginTop: 4 }}>
+                <TurnstileWidget
+                  key={captchaKey}
+                  siteKey={captcha.siteKey}
+                  onToken={setCaptchaToken}
+                />
+              </div>
+            )}
 
             {/* Error */}
             {error && (

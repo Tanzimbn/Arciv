@@ -313,15 +313,15 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting).
 
-> **Status (2026-08-02): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01, PUB-02, PUB-04, PUB-05, PUB-06, PUB-07 are done; PUB-03 is partial (link + feed *count* caps enforced, per-account storage cap not yet). Remaining optional follow-ups: signup captcha (PUB-04 hardening) and a per-account storage ceiling (PUB-03). See the "Public hosted launch" roadmap block in §10 for the per-item state.
+> **Status (2026-08-03): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile). Remaining before flipping fully public: guided at-signup BYOK onboarding. See the "Public hosted launch" roadmap block in §10 for the per-item state.
 
 **NFR-PUB-01 (BYOK)**: Every user brings their own AI provider key, selected from the app's offered providers. The service must run with **zero per-user AI cost to the operator**; the optional shared free-tier key stays capped per user per day.
 
 **NFR-PUB-02 (rate limiting everywhere)**: Rate limiting must extend beyond auth routes to all state-changing and compute-heavy endpoints — at minimum `POST /api/links` and `GET /api/links/search` (each search runs a server-side embedding). Limits are per user and per IP.
 
-**NFR-PUB-03 (resource quotas)**: Each account must have enforced ceilings — max links, max feeds, and total storage — to prevent a single user from exhausting shared capacity. *(Shipped: `MAX_LINKS_PER_USER` + `MAX_FEEDS_PER_USER` count caps in `api/config.py`, enforced in `POST /api/links` / `POST /api/feeds`. Not yet: per-account storage-bytes cap.)*
+**NFR-PUB-03 (resource quotas)**: Each account must have enforced ceilings — max links, max feeds, and total storage — to prevent a single user from exhausting shared capacity. *(Shipped: `MAX_LINKS_PER_USER` + `MAX_FEEDS_PER_USER` count caps and `MAX_STORAGE_BYTES_PER_USER` byte cap in `api/config.py`. Count caps enforced in `POST /api/links` / `POST /api/feeds`; the storage cap is soft-enforced at link-create against a running `users.storage_bytes` total maintained by `api/utils/storage.py` across create/update/delete + the AI classify/embed workers.)*
 
-**NFR-PUB-04 (registration abuse)**: Open signup must be protected against automated/disposable-email abuse (throttling and/or captcha) beyond the existing per-IP register cap.
+**NFR-PUB-04 (registration abuse)**: Open signup must be protected against automated/disposable-email abuse (throttling and/or captcha) beyond the existing per-IP register cap. *(Shipped: per-IP register cap + `BLOCK_DISPOSABLE_EMAILS` + `SIGNUPS_PER_DAY_GLOBAL`, plus Cloudflare Turnstile captcha — `TURNSTILE_SECRET_KEY`/`TURNSTILE_SITE_KEY`, verified in `POST /api/auth/register`, off by default for self-host.)*
 
 **NFR-PUB-05 (key custody)**: Holding many users' provider keys requires envelope encryption and a documented `ENCRYPTION_KEY` rotation path, so key rotation does not force every user to re-enter their key at once.
 
@@ -722,17 +722,17 @@ resurface forgotten-but-relevant items.
 ---
 
 ### Public hosted launch — turn the self-host app into a public multi-tenant service (planned)
-**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. **Mostly shipped as of 2026-08-02** on `feat/public-launch-hardening`.
+**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. **Mostly shipped as of 2026-08-03** on `feat/public-launch-hardening`.
 
 - [x] Rate limiting on `POST /api/links` and `GET /api/links/search` (per-user, per-minute) — NFR-PUB-02 (`LINKS_CREATE_PER_MINUTE`, `SEARCH_PER_MINUTE`, `INSIGHTS_PER_MINUTE`)
-- [~] Per-user resource quotas — NFR-PUB-03: link + feed count caps shipped (`MAX_LINKS_PER_USER`, `MAX_FEEDS_PER_USER`); **per-account storage cap still missing**
-- [~] Registration-abuse controls — NFR-PUB-04: disposable-email block (`BLOCK_DISPOSABLE_EMAILS`) + per-IP signup guards shipped; **captcha not yet**
+- [x] Per-user resource quotas — NFR-PUB-03: link + feed count caps (`MAX_LINKS_PER_USER`, `MAX_FEEDS_PER_USER`) + per-account storage-bytes cap (`MAX_STORAGE_BYTES_PER_USER`, running `users.storage_bytes`, `api/utils/storage.py`)
+- [x] Registration-abuse controls — NFR-PUB-04: disposable-email block (`BLOCK_DISPOSABLE_EMAILS`) + per-IP signup guards + Cloudflare Turnstile captcha (`TURNSTILE_SECRET_KEY`/`TURNSTILE_SITE_KEY`, off by default)
 - [x] Key-custody hardening: envelope encryption + `ENCRYPTION_KEY` rotation path — NFR-PUB-05
 - [x] Bounded server-side embedding — NFR-PUB-06: `EMBEDDING_MAX_CONCURRENCY` semaphore + Redis query-embed cache + optional `embed-service/` microservice (`EMBED_SERVICE_URL`)
 - [x] Legal + lifecycle: ToS, privacy policy, data export, account deletion — NFR-PUB-07 (`docs/legal/`, `GET /api/account/export`, `DELETE /api/account`)
 - [~] Provider-key onboarding UX — BYOK works in Settings (provider select + key + test-connection); **guided at-signup onboarding not yet**
 
-**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet. **Substantially met**; remaining safety gaps before flipping fully public: per-account storage cap and signup captcha.
+**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet. **Met** for the safety layer; the one remaining nicety before a fully public flip is guided at-signup BYOK onboarding.
 
 ---
 

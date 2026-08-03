@@ -25,6 +25,7 @@ from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
 from api.utils.metadata import canonicalize_url, fetch_article_text, fetch_metadata
 from api.utils.ratelimit import enforce_user_rate_limit
+from api.utils.storage import adjust_user_storage, link_bytes
 
 router = APIRouter()
 
@@ -80,6 +81,18 @@ async def create_link(
                 detail=f"Link limit reached ({settings.MAX_LINKS_PER_USER}). Delete some to add more.",
             )
 
+    # Soft storage-bytes gate against the running total. AI content lands async
+    # after create, so a user just under the cap may be nudged over by the
+    # worker; the next create is then blocked. Fine for an abuse guard.
+    if (
+        settings.MAX_STORAGE_BYTES_PER_USER > 0
+        and current_user.storage_bytes >= settings.MAX_STORAGE_BYTES_PER_USER
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Storage limit reached. Delete some links to free space.",
+        )
+
     meta = await fetch_metadata(canonical)
     content_type, queue = classify_by_url(canonical)
 
@@ -103,6 +116,9 @@ async def create_link(
     db.add(link)
     await db.commit()
     await db.refresh(link)
+
+    await adjust_user_storage(db, current_user.id, link_bytes(link))
+    await db.commit()
 
     if arq_pool is not None:
         if link.fetch_status == "unreachable":
@@ -270,6 +286,8 @@ async def update_link(
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
 
+    before = link_bytes(link)
+
     if body.queue is not None:
         link.queue = body.queue
     if body.content_type is not None:
@@ -285,6 +303,7 @@ async def update_link(
     if body.notes is not None:
         link.notes = body.notes if body.notes.strip() else None
 
+    await adjust_user_storage(db, link.user_id, link_bytes(link) - before)
     await db.commit()
     await db.refresh(link)
     return link
@@ -303,6 +322,7 @@ async def delete_link(
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
 
+    await adjust_user_storage(db, link.user_id, -link_bytes(link))
     await db.delete(link)
     await db.commit()
 
@@ -396,7 +416,9 @@ async def generate_insights(
     if not insights:
         raise HTTPException(status_code=502, detail="AI returned no insights. Try again.")
 
+    before = link_bytes(link)
     link.ai_insights = insights
+    await adjust_user_storage(db, link.user_id, link_bytes(link) - before)
     await db.commit()
     await db.refresh(link)
     return link
