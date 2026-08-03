@@ -311,15 +311,17 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 ### 3.6 Public Hosted Operation (planned)
 
-Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting) and are **not yet implemented**.
+Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting).
+
+> **Status (2026-08-03): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile), plus guided BYOK onboarding (first-login prompt + banner). All pre-launch items are now shipped. See the "Public hosted launch" roadmap block in §10 for the per-item state.
 
 **NFR-PUB-01 (BYOK)**: Every user brings their own AI provider key, selected from the app's offered providers. The service must run with **zero per-user AI cost to the operator**; the optional shared free-tier key stays capped per user per day.
 
 **NFR-PUB-02 (rate limiting everywhere)**: Rate limiting must extend beyond auth routes to all state-changing and compute-heavy endpoints — at minimum `POST /api/links` and `GET /api/links/search` (each search runs a server-side embedding). Limits are per user and per IP.
 
-**NFR-PUB-03 (resource quotas)**: Each account must have enforced ceilings — max links, max feeds, and total storage — to prevent a single user from exhausting shared capacity.
+**NFR-PUB-03 (resource quotas)**: Each account must have enforced ceilings — max links, max feeds, and total storage — to prevent a single user from exhausting shared capacity. *(Shipped: `MAX_LINKS_PER_USER` + `MAX_FEEDS_PER_USER` count caps and `MAX_STORAGE_BYTES_PER_USER` byte cap in `api/config.py`. Count caps enforced in `POST /api/links` / `POST /api/feeds`; the storage cap is soft-enforced at link-create against a running `users.storage_bytes` total maintained by `api/utils/storage.py` across create/update/delete + the AI classify/embed workers.)*
 
-**NFR-PUB-04 (registration abuse)**: Open signup must be protected against automated/disposable-email abuse (throttling and/or captcha) beyond the existing per-IP register cap.
+**NFR-PUB-04 (registration abuse)**: Open signup must be protected against automated/disposable-email abuse (throttling and/or captcha) beyond the existing per-IP register cap. *(Shipped: per-IP register cap + `BLOCK_DISPOSABLE_EMAILS` + `SIGNUPS_PER_DAY_GLOBAL`, plus Cloudflare Turnstile captcha — `TURNSTILE_SECRET_KEY`/`TURNSTILE_SITE_KEY`, verified in `POST /api/auth/register`, off by default for self-host.)*
 
 **NFR-PUB-05 (key custody)**: Holding many users' provider keys requires envelope encryption and a documented `ENCRYPTION_KEY` rotation path, so key rotation does not force every user to re-enter their key at once.
 
@@ -621,14 +623,17 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-> **Status (2026-07-01).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> **Status (2026-08-02).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
 > Auth was hardened beyond the original scope (email verification, refresh-token
 > rotation, password reset, rate limiting) and an **admin monitoring panel**
 > (daily traffic, unique visitors, signups via Redis aggregate counters) landed
-> ahead of Phase 5. The **next focus is the AI productivity layer** — Phase 3
-> (semantic search / similar items via pgvector embeddings) then Phase 4
-> (proactive resurface + weekly digest). Embeddings are the foundation both
-> depend on and are not yet built.
+> ahead of Phase 5. **Embeddings now exist** (local fastembed, migration
+> `0012_link_embedding`, optional `embed-service/` microservice) and **semantic
+> search has shipped end-to-end** — `GET /api/links/search` plus the search box
+> in `LinksView`. The **"Public hosted launch" hardening layer has also shipped**
+> (see block below and §3.6). Remaining Phase 3 work is the rest of the discovery
+> surface: **similar-items panel and topic explorer**, both not yet built. Phase 4
+> (proactive resurface + weekly digest) follows.
 
 ### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
@@ -664,16 +669,22 @@ user saves what they want via `POST /api/links`.
 
 ---
 
-### Phase 3 — Semantic search & topic explorer ⭐ NEXT
+### Phase 3 — Semantic search & topic explorer 🚧 partly shipped
 **Goal**: Make the saved library discoverable and connected. **Foundation step:
-generate an embedding per link at save time (pgvector) — the substrate for search,
-similar-items, dedup, and clustering. Not yet built.**
+generate an embedding per link at save time — the substrate for search,
+similar-items, dedup, and clustering. Shipped** (local fastembed model, stored on
+`links.embedding`, migration `0012_link_embedding`; optional `embed-service/`).
 
-- [ ] pgvector IVFFlat index for fast similarity search
-- [ ] Natural language search endpoint with embedding-based ranking
-- [ ] Similar items panel on each link detail view
-- [ ] Topic cluster view (group by tags, show counts)
-- [ ] Search UI with filters (type, queue, date, source)
+- [x] Embedding generated per link at save time (`agent/embedding.py`, worker `embed.py`)
+- [x] Natural language search endpoint with embedding-based ranking (`GET /api/links/search`)
+- [x] Search UI — semantic search box in `LinksView` (`api.searchLinks`, debounced)
+- [ ] Similar items panel on each link detail view (⭐ next — `LinkDetailDrawer.jsx` exists, add `GET /api/links/:id/similar`)
+- [ ] Topic cluster view (group by `ai_tags`, show counts; `GET /api/topics`)
+- [ ] Search filters (type, queue, date, source)
+
+> Note: search ranks by cosine similarity over stored embeddings via a linear scan
+> per user — no IVFFlat index yet. Fine at MVP scale; add the index when per-user
+> libraries grow large.
 
 **Milestone**: User can type "that article about Go concurrency" into search and find it instantly, even without remembering the title.
 
@@ -703,7 +714,7 @@ resurface forgotten-but-relevant items.
 - [x] Rate limiting middleware (slowapi + Redis; auth + link-save limits)
 - [ ] API response time profiling + slow query analysis
 - [ ] Lighthouse performance audit + fixes
-- [ ] Full data export endpoint
+- [x] Full data export endpoint (`GET /api/account/export`)
 - [x] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
 - [x] Comprehensive README with self-hosting guide
 - [x] Admin monitoring panel — daily traffic, unique visitors, signups (Redis counters)
@@ -711,17 +722,17 @@ resurface forgotten-but-relevant items.
 ---
 
 ### Public hosted launch — turn the self-host app into a public multi-tenant service (planned)
-**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. Nothing here is built yet.
+**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. **Mostly shipped as of 2026-08-03** on `feat/public-launch-hardening`.
 
-- [ ] Rate limiting on `POST /api/links` and `GET /api/links/search` (per user + per IP) — NFR-PUB-02
-- [ ] Per-user resource quotas: max links / feeds / storage — NFR-PUB-03
-- [ ] Registration-abuse controls (throttle / captcha, disposable-email handling) — NFR-PUB-04
-- [ ] Key-custody hardening: envelope encryption + `ENCRYPTION_KEY` rotation path — NFR-PUB-05
-- [ ] Bounded server-side embedding (concurrency cap or dedicated service) — NFR-PUB-06
-- [ ] Legal + lifecycle: ToS, privacy policy, data export, account deletion — NFR-PUB-07
-- [ ] Provider-key onboarding UX: guided BYOK setup at signup (offered providers, validation)
+- [x] Rate limiting on `POST /api/links` and `GET /api/links/search` (per-user, per-minute) — NFR-PUB-02 (`LINKS_CREATE_PER_MINUTE`, `SEARCH_PER_MINUTE`, `INSIGHTS_PER_MINUTE`)
+- [x] Per-user resource quotas — NFR-PUB-03: link + feed count caps (`MAX_LINKS_PER_USER`, `MAX_FEEDS_PER_USER`) + per-account storage-bytes cap (`MAX_STORAGE_BYTES_PER_USER`, running `users.storage_bytes`, `api/utils/storage.py`)
+- [x] Registration-abuse controls — NFR-PUB-04: disposable-email block (`BLOCK_DISPOSABLE_EMAILS`) + per-IP signup guards + Cloudflare Turnstile captcha (`TURNSTILE_SECRET_KEY`/`TURNSTILE_SITE_KEY`, off by default)
+- [x] Key-custody hardening: envelope encryption + `ENCRYPTION_KEY` rotation path — NFR-PUB-05
+- [x] Bounded server-side embedding — NFR-PUB-06: `EMBEDDING_MAX_CONCURRENCY` semaphore + Redis query-embed cache + optional `embed-service/` microservice (`EMBED_SERVICE_URL`)
+- [x] Legal + lifecycle: ToS, privacy policy, data export, account deletion — NFR-PUB-07 (`docs/legal/`, `GET /api/account/export`, `DELETE /api/account`)
+- [x] Provider-key onboarding UX — BYOK in Settings (provider select + key + test-connection) **and** guided onboarding: first-login modal + dismissible banner (`components/ByokOnboarding.jsx`), shown only when the user has no personal key and the instance has no shared key (`SettingsResponse.shared_ai_available`)
 
-**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet.
+**Milestone**: a stranger can register on the public URL, paste their own Gemini/OpenAI key, save links, and search — with abuse controls and quotas making that safe to leave open to the internet. **Met** — the safety layer and guided BYOK onboarding are both shipped; nothing pre-launch remains.
 
 ---
 

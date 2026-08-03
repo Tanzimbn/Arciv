@@ -11,6 +11,7 @@ from api.models.link import Link
 from api.models.user import User
 from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
+from api.utils.storage import adjust_user_storage, link_bytes
 
 _RETRY_DELAYS = [
     timedelta(minutes=2),
@@ -75,6 +76,10 @@ async def classify_link(ctx, link_id: str) -> None:
             if result is None:
                 raise RuntimeError("Provider returned None")
 
+            # Account the bytes the AI just added (summary/tags/raw JSON are the
+            # dominant per-link footprint). Failure branches only touch the small
+            # ai_error string, so they skip accounting — floored at 0 anyway.
+            before = link_bytes(link)
             link.content_type = result.content_type
             link.queue = result.queue
             link.ai_summary = result.summary
@@ -84,6 +89,8 @@ async def classify_link(ctx, link_id: str) -> None:
             link.ai_provider_used = provider_name
             link.ai_error = None
             link.processed_at = datetime.now(timezone.utc)
+            await db.commit()
+            await adjust_user_storage(db, link.user_id, link_bytes(link) - before)
             await db.commit()
             # Re-embed now that summary + tags exist, to enrich the vector.
             await redis.enqueue_job("embed_link", link_id)

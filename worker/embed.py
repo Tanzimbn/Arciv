@@ -12,6 +12,7 @@ from agent.embedding import embed_text
 from api.config import settings
 from api.database import AsyncSessionLocal
 from api.models.link import Link
+from api.utils.storage import EMBEDDING_BYTES, adjust_user_storage
 
 _BACKFILL_BATCH = 200
 
@@ -35,8 +36,13 @@ async def embed_link(ctx, link_id: str) -> None:
         vec = await embed_text(_embedding_text(link))
         if vec is None:
             return
+        had_embedding = link.embedding is not None
         link.embedding = vec
         await db.commit()
+        # A vector is a fixed +1536 bytes, counted once (re-embeds don't re-add).
+        if not had_embedding:
+            await adjust_user_storage(db, link.user_id, EMBEDDING_BYTES)
+            await db.commit()
 
 
 async def backfill_embeddings(ctx) -> None:

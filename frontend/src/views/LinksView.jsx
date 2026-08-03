@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errMessage } from "../api/client.js";
+import ByokOnboarding from "../components/ByokOnboarding.jsx";
 import LinkCard from "../components/LinkCard.jsx";
 import LinkDetailDrawer from "../components/LinkDetailDrawer.jsx";
 import NotificationBell from "../components/NotificationBell.jsx";
@@ -156,6 +157,11 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [semanticResults, setSemanticResults] = useState(null); // null = no semantic results (fall back to substring)
   const [searching, setSearching] = useState(false);
   const [username, setUsername] = useState(null);
+  // BYOK onboarding — prompt a keyless user (with no shared key to fall back on)
+  // to add a provider key, else their saved links never get classified.
+  const [needsByok, setNeedsByok] = useState(false);
+  const [showByok, setShowByok] = useState(false);
+  const [byokDismissed, setByokDismissed] = useState(false);
 
   // apply body classes
   useEffect(() => {
@@ -174,13 +180,22 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [active, archived, me] = await Promise.all([
+      const [active, archived, me, settings] = await Promise.all([
         api.getLinks({ limit: 500 }),
         api.getLinks({ queue: "archive", limit: 500 }),
         api.getMe(),
+        api.getSettings().catch(() => null),
       ]);
       setAllLinks([...active, ...archived]);
       if (me?.username) setUsername(me.username);
+      // No personal key and no shared key => AI can't classify anything.
+      const needs = !!settings && !settings.ai_api_key_masked && !settings.shared_ai_available;
+      setNeedsByok(needs);
+      // Auto-open the modal once per browser; the banner is the durable path back.
+      if (needs && !localStorage.getItem("arciv_byok_prompted")) {
+        localStorage.setItem("arciv_byok_prompted", "1");
+        setShowByok(true);
+      }
     } catch {
       // token may be expired
     } finally {
@@ -324,9 +339,11 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     }).length;
   }, [allLinks]);
 
-  function showToast(msg, color) {
+  const toastTimer = useRef(null);
+  function showToast(msg, color, duration = 2200) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, color });
-    setTimeout(() => setToast(null), 2200);
+    toastTimer.current = setTimeout(() => setToast(null), duration);
   }
 
   function commitSaved() {
@@ -358,11 +375,16 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       commitSaved();
     } catch (err) {
       if (err.status === 409) {
+        // Dedup is specific to the URL just typed — inline by the input fits.
         setSaveError(err.data?.detail?.message ?? "Already saved.");
+      } else if (err.status === 403) {
+        // Account-level quota (storage / link count). Surface the backend's
+        // actionable detail as a prominent, longer-lived red toast — the inline
+        // "Failed to save link" was ambiguous about the real cause + the fix.
+        showToast(errMessage(err, "Storage or link limit reached."), "var(--bad)", 5200);
       } else if (err.status === 429) {
-        // Rate limited — surface the backend's "max N per minute" detail so the
-        // user knows to slow down, not that the save is broken.
-        setSaveError(errMessage(err, "Too many requests — slow down a moment."));
+        // Rate limited — same treatment: a toast, not a "broken save" message.
+        showToast(errMessage(err, "Too many requests — slow down a moment."), "var(--bad)", 4200);
       } else {
         setSaveError("Failed to save link.");
       }
@@ -546,6 +568,47 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
 
       {/* ── Page ── */}
       <main className="arciv-page-pad" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 28px 80px" }}>
+
+        {/* BYOK nudge — only when AI is unavailable (no personal + no shared key) */}
+        {needsByok && !byokDismissed && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+            padding: "13px 16px", marginBottom: 20,
+            background: "var(--accent-tint)",
+            border: "1px solid color-mix(in oklab, var(--accent) 25%, transparent)",
+            borderRadius: 14,
+          }}>
+            <span style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", margin: 0 }}>
+                Turn on AI classification
+              </p>
+              <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "2px 0 0", lineHeight: 1.4 }}>
+                Add your AI provider key so Arciv can sort your links automatically.
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowByok(true)}
+              style={{
+                padding: "8px 15px", border: 0, borderRadius: 9, flexShrink: 0,
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: "var(--accent)", color: "var(--accent-ink)",
+              }}>
+              Add key
+            </button>
+            <button type="button" onClick={() => setByokDismissed(true)} aria-label="Dismiss"
+              style={{
+                width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                border: 0, background: "transparent", color: "var(--muted)",
+                cursor: "pointer", display: "grid", placeItems: "center", fontSize: 15,
+              }}>
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Hero */}
         <section className="arciv-hero" aria-label="Welcome">
@@ -753,6 +816,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
                   onDelete={id => setDeleteConfirm(id)}
                   onRetryAI={handleRetryAI}
                   onOpen={setSelectedLink}
+                  aiAvailable={!needsByok}
                 />
               ))
             )}
@@ -783,6 +847,26 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         </div>
       )}
 
+      {/* BYOK onboarding */}
+      {showByok && (
+        <ByokOnboarding
+          onDone={async (added) => {
+            setShowByok(false);
+            if (added) {
+              setNeedsByok(false);
+              showToast("AI classification is on", "var(--accent)");
+              // Re-pull settings so the banner/flag reflect the saved key.
+              try {
+                const s = await api.getSettings();
+                setNeedsByok(!s.ai_api_key_masked && !s.shared_ai_available);
+              } catch {
+                /* keep optimistic state */
+              }
+            }
+          }}
+        />
+      )}
+
       {/* Link detail drawer */}
       <LinkDetailDrawer
         link={selectedLink}
@@ -790,6 +874,8 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         onUpdate={handleLinkUpdate}
         onDelete={handleLinkDelete}
         onRetryAI={handleLinkRetryAI}
+        onOpenLink={setSelectedLink}
+        aiAvailable={!needsByok}
       />
     </div>
   );

@@ -8,6 +8,7 @@ class SettingsResponse(BaseModel):
     feed_notify_telegram: bool
     feed_notify_inapp: bool
     telegram_enabled: bool
+    shared_ai_available: bool
 
     model_config = {"from_attributes": True}
 
@@ -24,3 +25,14 @@ class AITestResult(BaseModel):
     success: bool
     message: str
     provider: str
+
+
+class UsageQuota(BaseModel):
+    used: int
+    limit: int  # 0 = unlimited
+
+
+class UsageResponse(BaseModel):
+    links: UsageQuota
+    feeds: UsageQuota
+    storage: UsageQuota  # bytes

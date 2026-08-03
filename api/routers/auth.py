@@ -22,9 +22,12 @@ from api.schemas.auth import (
     UserResponse,
     VerifyEmailRequest,
 )
+from slowapi.util import get_remote_address
+
 from api.utils.disposable_email import is_disposable
 from api.utils.ratelimit import limiter
 from api.utils.security import hash_password, verify_password
+from api.utils.turnstile import verify_turnstile
 from api.utils.tokens import (
     consume_email_token,
     create_refresh_token,
@@ -76,8 +79,14 @@ async def _issue_token_pair(db: AsyncSession, user: User, request: Request) -> T
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("3/hour")
+@limiter.limit(lambda: settings.AUTH_REGISTER_RATE_LIMIT)
 async def register(body: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    if not await verify_turnstile(body.captcha_token, get_remote_address(request)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Captcha verification failed. Please try again.",
+        )
+
     if settings.BLOCK_DISPOSABLE_EMAILS and is_disposable(body.email):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -127,7 +136,7 @@ async def register(body: RegisterRequest, request: Request, db: AsyncSession = D
 
 
 @router.post("/verify-email", response_model=MessageResponse)
-@limiter.limit("10/hour")
+@limiter.limit(lambda: settings.AUTH_VERIFY_EMAIL_RATE_LIMIT)
 async def verify_email(body: VerifyEmailRequest, request: Request, db: AsyncSession = Depends(get_db)):
     user_id = await consume_email_token("verify", body.token)
     if user_id is None:
@@ -150,7 +159,7 @@ async def verify_email(body: VerifyEmailRequest, request: Request, db: AsyncSess
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
-@limiter.limit("3/hour")
+@limiter.limit(lambda: settings.AUTH_RESEND_VERIFICATION_RATE_LIMIT)
 async def resend_verification(
     body: ResendVerificationRequest, request: Request, db: AsyncSession = Depends(get_db)
 ):
@@ -162,7 +171,7 @@ async def resend_verification(
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+@limiter.limit(lambda: settings.AUTH_LOGIN_RATE_LIMIT)
 async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
@@ -206,7 +215,7 @@ async def logout(body: LogoutRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
-@limiter.limit("3/hour")
+@limiter.limit(lambda: settings.AUTH_FORGOT_PASSWORD_RATE_LIMIT)
 async def forgot_password(
     body: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)
 ):
@@ -223,7 +232,7 @@ async def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-@limiter.limit("10/hour")
+@limiter.limit(lambda: settings.AUTH_RESET_PASSWORD_RATE_LIMIT)
 async def reset_password(body: ResetPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
     user_id = await consume_email_token("reset", body.token)
     if user_id is None:
