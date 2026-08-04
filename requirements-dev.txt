@@ -1,0 +1,16 @@
+# Development + CI tooling. Install alongside the runtime deps:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# The unit layer of the suite needs nothing but these; the integration layer
+# additionally needs a live Postgres (with pgvector) and Redis — see tests/README.md.
+pytest==8.3.3
+# >=0.26 for `asyncio_default_test_loop_scope`, which the integration fixtures
+# rely on to share one event loop (and therefore one asyncpg pool) per session.
+pytest-asyncio>=0.26,<2
+ruff==0.6.9
+# SQLAlchemy declares greenlet conditionally on platform_machine, and Apple
+# Silicon isn't in that list — so `alembic upgrade head` against the async engine
+# fails with "the greenlet library is required" on a bare macOS venv. Linux CI
+# and the Docker image get it transitively; pinning it here keeps local runs
+# working without touching the runtime requirements.
+greenlet>=3.0
