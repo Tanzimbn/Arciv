@@ -230,11 +230,17 @@ arciv/
 
 ### Backend (without Docker for the app, with Docker for db/redis)
 
+Use **Python 3.12** — the same version the Dockerfile and CI pin. Several
+dependencies (`asyncpg`, `pydantic-core`) have no prebuilt wheels for 3.13, so a
+3.13 interpreter falls back to compiling them from source and fails without a
+full C/Rust toolchain.
+
 ```bash
 # Backing services
 docker compose up -d db redis
 
 # Python deps
+python3.12 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
 # Migrations

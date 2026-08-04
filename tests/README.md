@@ -18,9 +18,13 @@ nothing.
 Unit layer only, no setup:
 
 ```bash
+python3.12 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 pytest                       # integration tests skip with a reason
 ```
+
+Python 3.12, matching the Dockerfile and CI — `asyncpg` and `pydantic-core` have
+no 3.13 wheels at the pinned versions and fall back to a source build.
 
 Full suite. Ports are deliberately non-default so a throwaway stack can't collide
 with your dev `docker compose` stack:

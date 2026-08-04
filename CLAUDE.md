@@ -167,6 +167,7 @@ The suite lives in `tests/`; full setup notes in `tests/README.md`. Two layers:
 - **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search.
 
 ```bash
+python3.12 -m venv venv && source venv/bin/activate   # 3.13 has no wheels for asyncpg/pydantic-core at the pinned versions
 pip install -r requirements.txt -r requirements-dev.txt
 ruff check .
 pytest                                    # integration layer skips if services are down
