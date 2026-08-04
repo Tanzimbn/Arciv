@@ -259,6 +259,31 @@ npm run dev          # dev server at http://localhost:5173 (proxies /api to :800
 npm run build        # builds frontend/dist for production
 ```
 
+### Tests
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check .
+pytest                       # unit layer only; integration tests skip with a reason
+```
+
+The integration layer runs the real app against a real Postgres (pgvector) and
+Redis. Throwaway containers on non-default ports so they can't collide with your
+dev stack:
+
+```bash
+docker run -d --name arciv-test-pg -e POSTGRES_USER=arciv -e POSTGRES_PASSWORD=arciv \
+  -e POSTGRES_DB=arciv_test -p 55432:5432 pgvector/pgvector:pg16
+docker run -d --name arciv-test-redis -p 56379:6379 redis:7
+
+TEST_DATABASE_URL=postgresql://arciv:arciv@localhost:55432/arciv_test \
+TEST_REDIS_URL=redis://localhost:56379/15 \
+pytest
+```
+
+Full details — fixtures, environment variables, why the event loop is
+session-scoped — in [tests/README.md](tests/README.md).
+
 ### Database migrations
 
 ```bash
@@ -354,8 +379,8 @@ PRs welcome. The project is small enough that a single PR can land a meaningful 
 
 1. Fork the repo and create a feature branch from `main` (e.g. `feat/full-text-search`).
 2. Make your change. Keep commits focused — one concern per commit, conventional-commits style (`fix(api): …`, `feat(agent): …`).
-3. Test what you can — health check, manual flow through the relevant routes.
-4. Open a PR against `main` with a description of *why* the change exists. CI will build the Docker image to validate.
+3. Run `ruff check .` and `pytest` (see [Tests](#tests)). Add a test for anything touching tenancy scoping, quotas, or key handling — those are the invariants that make a public instance safe to leave open.
+4. Open a PR against `main` with a description of *why* the change exists. CI runs lint, the test suite against real Postgres/Redis, the SPA build, and a secret scan.
 
 If you're working on something that touches the spec (`docs/requirements-mvp.md`), call out the deviation in the PR description.
 
