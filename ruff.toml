@@ -1,0 +1,15 @@
+# Deliberately narrow: this gate exists to catch real defects (undefined names,
+# unused imports, broken f-strings, syntax-level mistakes), not to impose a
+# formatting opinion on an existing codebase. Widen the rule set when someone
+# wants to do a formatting pass on purpose.
+line-length = 110
+target-version = "py311"
+exclude = ["db/migrations/versions", "frontend", ".venv"]
+
+[lint]
+select = [
+    "E4",  # imports
+    "E7",  # statement-level mistakes (comparisons to None/True, etc.)
+    "E9",  # syntax / IO errors
+    "F",   # pyflakes: undefined names, unused imports, bad f-strings
+]

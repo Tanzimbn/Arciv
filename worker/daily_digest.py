@@ -1,16 +1,13 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.database import AsyncSessionLocal
 from api.models.link import Link
 from api.models.feed import Feed
-from api.models.notification import Notification
 from api.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -27,7 +24,7 @@ async def send_daily_digest():
         result = await session.execute(
             select(User).where(
                 User.telegram_chat_id.isnot(None),
-                User.feed_notify_telegram == True
+                User.feed_notify_telegram.is_(True),
             )
         )
         users = result.scalars().all()
@@ -102,14 +99,11 @@ async def send_daily_digest():
 
 
 async def create_quota_warning_notifications():
-    """Create notifications for users approaching AI quota limits"""
-    async with AsyncSessionLocal() as session:
-        # For MVP, we'll just check shared Gemini key usage
-        # In a real implementation, you'd track per-user usage
-        
-        # Get today's date in UTC
-        today = datetime.now(timezone.utc).date()
-        
-        # This is a placeholder for quota checking logic
-        # In a real implementation, you'd check Redis for usage counts
-        pass
+    """Notify users approaching the shared-key AI quota — not implemented.
+
+    Usage lives in Redis at ``ai_usage:<user_id>:<YYYY-MM-DD>`` (see
+    ``worker/ai_classify._get_provider``); this would read those counters and
+    raise a notification near ``SHARED_DAILY_LIMIT``. Not registered in
+    ``WorkerSettings.functions``, so nothing calls it yet.
+    """
+    return

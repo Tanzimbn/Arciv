@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ARRAY,
@@ -16,6 +17,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
 from api.database import Base
+
+if TYPE_CHECKING:  # import-time cycle: api.models.user imports Link back
+    from api.models.user import User
 
 
 class Link(Base):

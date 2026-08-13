@@ -23,6 +23,7 @@
    - 3.3 [Reliability](#33-reliability)
    - 3.4 [Security](#34-security)
    - 3.5 [Self-Hostability](#35-self-hostability)
+   - 3.6 [Public Hosted Operation](#36-public-hosted-operation-shipped)
 4. [Technical Stack](#4-technical-stack)
 5. [System Architecture](#5-system-architecture)
    - 5.1 [Components](#51-components)
@@ -32,8 +33,9 @@
 8. [Feed Tracker Specification](#8-feed-tracker-specification)
 9. [AI Agent Specification](#9-ai-agent-specification)
 10. [Phase Roadmap](#10-phase-roadmap)
-11. [Open Source Requirements](#11-open-source-requirements)
-12. [Out of Scope (v1)](#12-out-of-scope-v1)
+11. [Testing & CI](#11-testing--ci)
+12. [Open Source Requirements](#12-open-source-requirements)
+13. [Out of Scope (v1)](#13-out-of-scope-v1)
 
 ---
 
@@ -55,7 +57,7 @@ Arciv is a self-hostable web application where:
 **Deployment modes.** Arciv targets two first-class modes from the same codebase:
 
 - **Self-hosted** (shipped) — `docker compose up`, single- or multi-user, operator controls everything.
-- **Public hosted service** (planned) — a deployed instance anyone can sign up on, using their **own AI provider key** (BYOK) chosen from the providers the app offers. No per-user AI cost falls on the operator; the multi-tenant foundation (per-`user_id` isolation, encrypted keys, email verification) already exists. This mode adds a public-internet hardening layer — see §3.6.
+- **Public hosted service** (hardening layer shipped, not yet deployed) — a deployed instance anyone can sign up on, using their **own AI provider key** (BYOK) chosen from the providers the app offers. No per-user AI cost falls on the operator; the multi-tenant foundation (per-`user_id` isolation, encrypted keys, email verification) already exists. This mode adds a public-internet hardening layer, all of which has shipped — see §3.6.
 
 ### Goals
 
@@ -309,11 +311,13 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 ---
 
-### 3.6 Public Hosted Operation (planned)
+### 3.6 Public Hosted Operation (shipped)
 
 Requirements specific to running Arciv as a **public, multi-tenant hosted service** where any visitor can self-register and use it with their own AI provider key. These sit on top of the existing tenancy foundation (per-`user_id` isolation, AES-256 key encryption, email verification, SSRF guard on outbound fetches, auth-route rate limiting).
 
-> **Status (2026-08-03): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile), plus guided BYOK onboarding (first-login prompt + banner). All pre-launch items are now shipped. See the "Public hosted launch" roadmap block in §10 for the per-item state.
+> **Status (2026-08-04): the NFR-PUB hardening layer has shipped** on `feat/public-launch-hardening`. PUB-01 through PUB-07 are done, including PUB-03 (per-account storage-bytes cap via `MAX_STORAGE_BYTES_PER_USER` + running `users.storage_bytes`) and PUB-04 signup captcha (Cloudflare Turnstile), plus guided BYOK onboarding (first-login prompt + banner). All pre-launch items are now shipped, and each NFR-PUB invariant now has a regression test under `tests/integration/` (see §11). See the "Public hosted launch" roadmap block in §10 for the per-item state.
+>
+> **Known residual gap.** The SSRF guard (`api/utils/metadata._assert_safe_url`) rejects private **IP literals** but does not resolve hostnames, so a hostname pointing at a private address (e.g. an internal service name, or a public DNS record resolving to `127.0.0.1`) still reaches the fetcher. Closing it requires resolving the host, validating every returned address, and pinning the connection to a validated address to defeat DNS rebinding. Asserted as an accepted limitation in `tests/test_ssrf_guard.py::test_known_gap_hostnames_are_not_resolved`.
 
 **NFR-PUB-01 (BYOK)**: Every user brings their own AI provider key, selected from the app's offered providers. The service must run with **zero per-user AI cost to the operator**; the optional shared free-tier key stays capped per user per day.
 
@@ -623,29 +627,32 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-> **Status (2026-08-02).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> **Status (2026-08-04).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
 > Auth was hardened beyond the original scope (email verification, refresh-token
 > rotation, password reset, rate limiting) and an **admin monitoring panel**
 > (daily traffic, unique visitors, signups via Redis aggregate counters) landed
 > ahead of Phase 5. **Embeddings now exist** (local fastembed, migration
-> `0012_link_embedding`, optional `embed-service/` microservice) and **semantic
+> `0012_link_embedding`, optional `embed-service/` microservice), **semantic
 > search has shipped end-to-end** — `GET /api/links/search` plus the search box
-> in `LinksView`. The **"Public hosted launch" hardening layer has also shipped**
-> (see block below and §3.6). Remaining Phase 3 work is the rest of the discovery
-> surface: **similar-items panel and topic explorer**, both not yet built. Phase 4
-> (proactive resurface + weekly digest) follows.
+> in `LinksView` — and so has the **similar-items panel**
+> (`GET /api/links/:id/similar` + the Related section in `LinkDetailDrawer.jsx`).
+> The **"Public hosted launch" hardening layer has also shipped**
+> (see block below and §3.6), and it now has a real test suite and CI behind it
+> (`tests/`, `.github/workflows/ci.yml` — see §11). Remaining Phase 3 work is the
+> rest of the discovery surface: **topic explorer and search filters**, neither
+> built. Phase 4 (proactive resurface + weekly digest) follows.
 
 ### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
 
-- [ ] Project scaffolding: FastAPI + PostgreSQL + Redis via Docker Compose
-- [ ] User auth (register, login, JWT)
-- [ ] `POST /api/links` endpoint with URL validation + dedup
-- [ ] BullMQ worker consuming from the link queue
-- [ ] AI agent: content fetch + classify + summarise (Anthropic Claude)
-- [ ] pgvector setup + embedding generation
-- [ ] Basic web UI: link submission input + queue list view
-- [ ] Telegram bot: receive URL → submit to API → reply with summary
+- [x] Project scaffolding: FastAPI + PostgreSQL + Redis via Docker Compose
+- [x] User auth (register, login, JWT) — plus email verification, refresh-token rotation, password reset
+- [x] `POST /api/links` endpoint with URL validation + dedup (`UNIQUE (user_id, canonical_url)`)
+- [x] Worker consuming from the link queue — **ARQ, not BullMQ** (see §4)
+- [x] AI agent: content fetch + classify + summarise — five providers behind one interface, not Claude-only
+- [x] pgvector setup + embedding generation (migration `0012_link_embedding`; landed with Phase 3)
+- [x] Basic web UI: link submission input + queue list view
+- [x] Telegram bot: receive URL → submit to API → reply with summary — built, but **off by default** (`TELEGRAM_ENABLED=false`, `telegram` Compose profile)
 
 **Milestone**: User can paste a link on the web or forward it on Telegram, and see it appear in the correct queue with a summary within 30 seconds.
 
@@ -657,13 +664,14 @@ Classification rules:
 poll emits one grouped notification per feed; no auto-ingest of `Link` rows. The
 user saves what they want via `POST /api/links`.
 
-- [ ] `feeds` table + Alembic migration
-- [ ] Feed auto-discovery algorithm
-- [ ] BullMQ repeatable job for feed polling (every 30 min)
-- [ ] Conditional GET with ETag/Last-Modified
-- [ ] Feed health metrics (poll_failures, engagement rate)
-- [ ] Feed Manager UI: add/pause/remove feeds, view health
-- [ ] Feed items flow through same AI agent as push links
+- [x] `feeds` + `feed_items` tables + Alembic migration
+- [x] Feed auto-discovery algorithm (`api/utils/feed_discovery.py`)
+- [x] Repeatable job for feed polling — **ARQ cron, daily** (`FEED_POLL_CRON`, default `0 8 * * *`), not every 30 min
+- [x] Conditional GET with ETag/Last-Modified (`feeds.last_etag`, `feeds.last_modified`)
+- [x] Feed failure tracking (`feeds.consecutive_failures`, surfaced in `FeedsView`)
+- [ ] Feed engagement metrics (save-through rate per feed) — not tracked
+- [x] Feed Manager UI: add/pause/remove feeds, view health
+- [ ] Feed items flow through same AI agent as push links — **deliberately not built**; see the deviation above. Do not implement without revisiting that decision.
 
 **Milestone**: User can subscribe to 10 RSS feeds and wake up each morning with new posts automatically classified and queued.
 
@@ -678,8 +686,8 @@ similar-items, dedup, and clustering. Shipped** (local fastembed model, stored o
 - [x] Embedding generated per link at save time (`agent/embedding.py`, worker `embed.py`)
 - [x] Natural language search endpoint with embedding-based ranking (`GET /api/links/search`)
 - [x] Search UI — semantic search box in `LinksView` (`api.searchLinks`, debounced)
-- [ ] Similar items panel on each link detail view (⭐ next — `LinkDetailDrawer.jsx` exists, add `GET /api/links/:id/similar`)
-- [ ] Topic cluster view (group by `ai_tags`, show counts; `GET /api/topics`)
+- [x] Similar items panel on each link detail view (`GET /api/links/:id/similar` + Related section in `LinkDetailDrawer.jsx`)
+- [ ] Topic cluster view (⭐ next — group by `ai_tags`, show counts; `GET /api/topics`)
 - [ ] Search filters (type, queue, date, source)
 
 > Note: search ranks by cosine similarity over stored embeddings via a linear scan
@@ -710,19 +718,20 @@ resurface forgotten-but-relevant items.
 ### Phase 5 — Optimisation & polish (ongoing)
 **Goal**: Production-ready performance and developer experience.
 
-- [ ] Redis caching for frequent API queries
-- [x] Rate limiting middleware (slowapi + Redis; auth + link-save limits)
+- [x] Redis caching — search query embeddings (`SEARCH_EMBED_CACHE_TTL`); no route-level response cache yet
+- [x] Rate limiting middleware (slowapi + Redis; auth + link-save + search + insights limits)
 - [ ] API response time profiling + slow query analysis
 - [ ] Lighthouse performance audit + fixes
 - [x] Full data export endpoint (`GET /api/account/export`)
-- [x] GitHub Actions CI: lint, test, build, push Docker image to ghcr.io
+- [x] Automated test suite — `tests/` (unit + integration against real Postgres/pgvector + Redis); see §11
+- [x] GitHub Actions CI: ruff lint, pytest against service containers, SPA build (`ci.yml`); Docker build + push to ghcr.io (`docker.yml`); gitleaks secret scan (`secret-scan.yml`)
 - [x] Comprehensive README with self-hosting guide
 - [x] Admin monitoring panel — daily traffic, unique visitors, signups (Redis counters)
 
 ---
 
-### Public hosted launch — turn the self-host app into a public multi-tenant service (planned)
-**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. **Mostly shipped as of 2026-08-03** on `feat/public-launch-hardening`.
+### Public hosted launch — turn the self-host app into a public multi-tenant service ✅ shipped
+**Goal**: let anyone sign up on a deployed instance and use it with their own AI provider key, without self-hosting. This is a hardening/ops layer on top of the shipped app (see §3.6), not new product surface. **Shipped as of 2026-08-04** on `feat/public-launch-hardening`, with a regression test per invariant under `tests/integration/`.
 
 - [x] Rate limiting on `POST /api/links` and `GET /api/links/search` (per-user, per-minute) — NFR-PUB-02 (`LINKS_CREATE_PER_MINUTE`, `SEARCH_PER_MINUTE`, `INSIGHTS_PER_MINUTE`)
 - [x] Per-user resource quotas — NFR-PUB-03: link + feed count caps (`MAX_LINKS_PER_USER`, `MAX_FEEDS_PER_USER`) + per-account storage-bytes cap (`MAX_STORAGE_BYTES_PER_USER`, running `users.storage_bytes`, `api/utils/storage.py`)
@@ -736,7 +745,59 @@ resurface forgotten-but-relevant items.
 
 ---
 
-## 11. Open Source Requirements
+## 11. Testing & CI
+
+Rationale: opening the app to the public internet means the safety properties
+(tenancy isolation, quotas, key custody) can no longer be verified by reading the
+code once. Each is covered by a test that fails if the property is broken.
+
+### Layers
+
+| Layer | Location | Needs | Covers |
+|---|---|---|---|
+| unit | `tests/test_*.py` | nothing | envelope encryption + key rotation, storage byte accounting, URL canonicalisation, SSRF guard, heuristics, signup guards (captcha fail-closed), password/JWT primitives |
+| integration | `tests/integration/` | Postgres (pgvector) + Redis | auth flow + token lifecycle, cross-tenant isolation, quotas, rate limits, storage deltas across every mutation site, account export/delete, semantic search + related links |
+
+The integration layer runs the real app in-process over `httpx.ASGITransport`
+against real services — the invariants it covers are enforced by SQL and Redis, so
+mocking them would test nothing. Setup, fixtures and environment variables are
+documented in `tests/README.md`.
+
+Nothing in the suite reaches the public internet: the `no_network` fixture turns
+any real outbound HTTP request into a test failure.
+
+### Invariant → test mapping
+
+| Invariant | Test |
+|---|---|
+| NFR-PUB-01 tenancy: every query filtered by `user_id` | `tests/integration/test_tenancy.py` |
+| NFR-PUB-02 per-user rate limits | `tests/integration/test_rate_limits.py` |
+| NFR-PUB-03 link/feed/storage quotas | `tests/integration/test_quotas.py`, `test_storage_deltas.py`, `tests/test_storage_accounting.py` |
+| NFR-PUB-04 registration abuse controls | `tests/test_signup_guards.py`, `test_rate_limits.py` |
+| NFR-PUB-05 key custody + rotation | `tests/test_encryption.py`, `test_tenancy.py` (encrypted at rest, masked in responses) |
+| NFR-PUB-07 export + deletion | `tests/integration/test_account_lifecycle.py` |
+| SSRF guard on outbound fetches | `tests/test_ssrf_guard.py` (including the documented hostname-resolution gap) |
+
+### CI
+
+`.github/workflows/ci.yml` runs three jobs on every push to `main` and every PR:
+
+1. **lint** — `ruff check .`
+2. **test** — `pytest -q` on Python 3.12 against `pgvector/pgvector:pg16` and
+   `redis:7` service containers, with `ARCIV_REQUIRE_SERVICES=1` so an unreachable
+   service fails the build instead of silently skipping the integration layer.
+3. **frontend** — `npm ci && npm run build` (no SPA test/lint script exists yet, so
+   the build is the gate).
+
+Two other workflows complete the pipeline: `docker.yml` (multi-arch build, push to
+ghcr.io) and `secret-scan.yml` (gitleaks over full history).
+
+Python is pinned to **3.12** to match the Dockerfile; several pinned dependencies
+have no wheels for 3.13.
+
+---
+
+## 12. Open Source Requirements
 
 - **License**: MIT
 - **Repository structure**: monorepo at `github.com/{username}/Arciv`
@@ -749,7 +810,7 @@ resurface forgotten-but-relevant items.
 
 ---
 
-## 12. Out of Scope (v1)
+## 13. Out of Scope (v1)
 
 The following features are explicitly deferred to future versions to keep v1 focused. Note: running as a **public multi-tenant hosted service** is now an active direction (§3.6) — but that means many independent single-user tenants, *not* the shared/team features below (team workspaces, collaboration, public developer API remain out of scope).
 

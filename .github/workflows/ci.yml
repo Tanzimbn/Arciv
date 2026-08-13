@@ -1,9 +1,97 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  lint:
+    name: Lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the Dockerfile base image; several pinned deps have no
+          # wheels for 3.13.
+          python-version: "3.12"
+      - run: pip install ruff==0.6.9
+      - run: ruff check .
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      # pgvector, not plain postgres: the embeddings migration creates the
+      # `vector` extension and the search tests run real cosine queries.
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: arciv
+          POSTGRES_PASSWORD: arciv
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U arciv"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # conftest.py creates arciv_test itself and refuses any database whose name
+      # doesn't end in _test.
+      TEST_DATABASE_URL: postgresql://arciv:arciv@localhost:5432/arciv_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+      # Turn "services unreachable -> skip" into a hard failure. Without this a
+      # broken service container would silently reduce CI to the unit layer.
+      ARCIV_REQUIRE_SERVICES: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
       - name: Run tests
-        run: echo "Add your test commands here"
+        run: pytest -q
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      # No test or lint script is configured for the SPA yet, so the build is the
+      # gate: it catches syntax errors, bad imports and Tailwind config breakage.
+      - run: npm run build
+        working-directory: frontend

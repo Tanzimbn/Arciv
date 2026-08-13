@@ -1,8 +1,6 @@
-import asyncio
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,7 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import httpx
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.database import AsyncSessionLocal

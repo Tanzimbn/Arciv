@@ -2,9 +2,7 @@ import httpx
 
 from agent.base import AIProvider, AIResult
 from agent.prompt import (
-    AuthError,
     ParseError,
-    QuotaError,
     SYSTEM_PROMPT,
     build_user_message,
     parse_ai_response,

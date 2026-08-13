@@ -71,7 +71,7 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
 
             await db.commit()
 
-        except Exception as e:
+        except Exception:
             async with AsyncSessionLocal() as db2:
                 feed2 = await db2.get(Feed, uuid.UUID(feed_id))
                 if not feed2:

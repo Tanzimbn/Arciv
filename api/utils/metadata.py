@@ -1,4 +1,5 @@
 import ipaddress
+from datetime import datetime
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
@@ -40,7 +41,7 @@ def _assert_safe_url(url: str) -> None:
     try:
         addr = ipaddress.ip_address(host)
         if any(addr in net for net in _PRIVATE_NETWORKS):
-            raise ValueError(f"Requests to private/internal addresses are not allowed")
+            raise ValueError("Requests to private/internal addresses are not allowed")
     except ValueError as e:
         if "private" in str(e) or "internal" in str(e):
             raise
@@ -85,10 +86,9 @@ async def canonicalize_url(url: str) -> str:
     ))
 
 
-def _parse_date(value: str | None) -> "datetime | None":
+def _parse_date(value: str | None) -> datetime | None:
     if not value:
         return None
-    from datetime import datetime
     try:
         return datetime.fromisoformat(value.strip())
     except ValueError:
