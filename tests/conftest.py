@@ -269,10 +269,14 @@ def canonicalize_offline(url: str) -> str:
     Applies the same tracking-param strip + trailing-slash rule, minus the
     redirect fetch. The real function's behaviour is covered separately in
     tests/test_url_canonicalisation.py with the HTTP layer faked.
-    """
-    from api.utils.metadata import TRACKING_PARAMS, _assert_safe_url
 
-    _assert_safe_url(url)
+    It deliberately runs no SSRF check: the real one resolves DNS (see
+    api/utils/safe_fetch.py) and a stub that fakes that would be asserting
+    against itself. Tests that care about the guard use the real
+    ``canonicalize_url`` — tests/integration/test_outbound_guard.py.
+    """
+    from api.utils.metadata import TRACKING_PARAMS
+
     parts = urlsplit(url)
     params = parse_qs(parts.query, keep_blank_values=True)
     query = urlencode({k: v for k, v in params.items() if k not in TRACKING_PARAMS}, doseq=True)

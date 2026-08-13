@@ -43,24 +43,10 @@ async def create_link(
     - Canonicalizes URL, checks for existing user-specific link, fetches metadata.
     - Enqueues AI classification job when available; returns created Link
     """
-    canonical = await canonicalize_url(body.url)
-
-    result = await db.execute(
-        select(Link).where(
-            Link.user_id == current_user.id,
-            Link.canonical_url == canonical,
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": f"You already saved this on {existing.saved_at.strftime('%Y-%m-%d')}. View it here.",
-                "link_id": str(existing.id),
-            },
-        )
-
+    # Every guard that doesn't need the canonical URL runs before the first
+    # outbound fetch. canonicalize_url is itself a request to a user-supplied
+    # host, so limiting after it would leave the fetchers unthrottled — the
+    # expensive half of the endpoint would be free.
     arq_pool = getattr(request.app.state, "arq_pool", None)
     await enforce_user_rate_limit(
         arq_pool,
@@ -91,6 +77,31 @@ async def create_link(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Storage limit reached. Delete some links to free space.",
+        )
+
+    try:
+        canonical = await canonicalize_url(body.url)
+    except ValueError as exc:
+        # Unsupported scheme, malformed URL, or a host that resolves into the
+        # private network — a client error, not a server one.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    result = await db.execute(
+        select(Link).where(
+            Link.user_id == current_user.id,
+            Link.canonical_url == canonical,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": f"You already saved this on {existing.saved_at.strftime('%Y-%m-%d')}. View it here.",
+                "link_id": str(existing.id),
+            },
         )
 
     meta = await fetch_metadata(canonical)

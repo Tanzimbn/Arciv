@@ -2,15 +2,20 @@
 
 If canonicalisation changes shape, previously-deduped links stop deduping (and
 already-saved rows can never be matched again), so the exact output format is
-pinned here. Network is faked: `canonicalize_url` opens a real httpx client, so
-the tests substitute the streaming call rather than reaching out.
+pinned here. Both halves of the network are faked — DNS via `safe_fetch._resolve`
+and the wire via the httpx transport — because `canonicalize_url` now resolves
+each hop and pins the connection to the address it validated.
 """
+import ipaddress
 from urllib.parse import urlparse
 
 import httpx
 import pytest
 
 from api.utils import metadata as md
+from api.utils import safe_fetch
+
+FAKE_PUBLIC_IP = "93.184.216.34"
 
 
 @pytest.fixture
@@ -18,36 +23,27 @@ def resolves_to(monkeypatch):
     """Make `canonicalize_url` behave as if the server redirected to `final`."""
 
     def _install(final: str | None = None, *, raises: Exception | None = None):
-        class _Resp:
-            def __init__(self, url):
-                self.url = url
+        async def resolve(host):
+            # Mirror getaddrinfo on a literal: hand back the address itself, so
+            # the guard's own tests below still see the address they passed in.
+            try:
+                ipaddress.ip_address(host)
+                return [host]
+            except ValueError:
+                return [FAKE_PUBLIC_IP]
 
-        class _StreamCM:
-            def __init__(self, url):
-                self._url = url
+        hops = {"n": 0}
 
-            async def __aenter__(self):
-                if raises is not None:
-                    raise raises
-                return _Resp(self._url)
+        async def handle(transport_self, request):
+            if raises is not None:
+                raise raises
+            hops["n"] += 1
+            if final is not None and hops["n"] == 1:
+                return httpx.Response(302, headers={"Location": final})
+            return httpx.Response(200, text="")
 
-            async def __aexit__(self, *exc):
-                return False
-
-        class _Client:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            def stream(self, method, url, **kw):
-                return _StreamCM(final if final is not None else url)
-
-        monkeypatch.setattr(md.httpx, "AsyncClient", _Client)
+        monkeypatch.setattr(safe_fetch, "_resolve", resolve)
+        monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", handle)
 
     return _install
 

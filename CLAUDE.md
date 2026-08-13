@@ -97,6 +97,8 @@ class AIProvider:
 
 **API keys encrypted at rest.** `ai_api_key_enc` in the DB uses AES-256 (`api/utils/encryption.py`). Keys are never returned in API responses — only a masked version (`sk-...****`).
 
+**User-supplied URLs are fetched only via `api/utils/safe_fetch.py`.** `safe_request` / `safe_stream` resolve the host, reject it if any address is private/loopback/link-local/reserved/CGNAT, and pin the connection to the validated address (`Host` header + TLS SNI keep the real hostname), revalidating every redirect hop. They return `(response, logical_url)` — use `logical_url`, never `response.url` (which is the pinned IP), or canonicalisation and `UNIQUE (user_id, canonical_url)` dedup break silently. Never add a bare `httpx` call on a user URL; `tests/test_ssrf_guard.py::test_no_module_fetches_a_user_url_outside_safe_fetch` scans for it. Operator-configured clients (mailer, Turnstile, Ollama, embed service) take no user input and stay outside this. `ALLOW_PRIVATE_NETWORK_FETCH=true` reopens private targets for LAN self-hosters.
+
 **Shared Gemini key has a per-user daily cap.** When a user has not configured their own provider, `worker/ai_classify._get_provider` falls back to `SHARED_GEMINI_KEY` only up to `SHARED_DAILY_LIMIT` (currently 20) calls per user per day, tracked in Redis at `ai_usage:<user_id>:<YYYY-MM-DD>`. Past the cap, the link's `ai_status` stays `pending`.
 
 ## MVP Phases (all scaffolded — keep extending these)

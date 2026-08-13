@@ -102,12 +102,25 @@ opened them — a fresh loop per test would hand out connections attached to a d
 one. Don't lower this to `function` scope without also rebuilding the engine per
 test.
 
-## Known gap
+## Outbound fetching
 
-`api/utils/metadata._assert_safe_url` blocks private **IP literals** but never
-resolves hostnames, so `http://internal-host/` reaches the fetcher. This is
-documented as an accepted limitation in
-`tests/test_ssrf_guard.py::test_known_gap_hostnames_are_not_resolved` rather than
-left silent. Closing it means resolving the host, validating every returned
-address, and pinning the connection to a validated one to defeat DNS rebinding —
-if that lands, invert that test.
+`tests/test_ssrf_guard.py` owns the policy in `api/utils/safe_fetch.py`: blocked
+address classes, hostname resolution, per-hop redirect revalidation, and that the
+connection is pinned to the validated address while `Host` and `sni_hostname` keep
+the real hostname. Two things there are easy to break by accident:
+
+- **Never let a test do real DNS.** Patch `safe_fetch._resolve`; the `no_network`
+  fixture only catches real HTTP, not `getaddrinfo`.
+- **`safe_request` returns `(response, logical_url)`.** The logical URL is
+  hostname-based; `response.url` is the pinned IP. Anything feeding
+  canonicalisation must use the former or DB-level dedup breaks silently —
+  `test_final_url_is_logical_not_the_pinned_address` pins that.
+
+`test_no_module_fetches_a_user_url_outside_safe_fetch` scans the fetcher modules'
+source, so a new `httpx.get(user_url)` fails CI instead of shipping unguarded. Add
+the module to its watch list when you add a fetcher.
+
+`tests/integration/test_outbound_guard.py` covers the paths that swallow every
+exception and write to the DB instead of returning anything — feed poll, link
+create, subscribe seeding — where row state is the only observable proof the guard
+fired.

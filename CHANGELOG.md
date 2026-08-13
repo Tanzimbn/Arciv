@@ -5,6 +5,32 @@ All notable changes to Arciv will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Outbound fetching of user-supplied URLs is now guarded in one place**
+  (`api/utils/safe_fetch.py`). Every fetcher — link metadata, article text, URL
+  canonicalisation, feed discovery, subscribe-time history seeding, and the feed
+  poll cron — goes through it. Per redirect hop it rejects non-`http(s)` schemes,
+  resolves the hostname and rejects the host if *any* returned address is private,
+  loopback, link-local, reserved, multicast, unspecified, CGNAT (`100.64.0.0/10`),
+  `192.0.0.0/24` or `198.18.0.0/15`, then connects **pinned to the validated
+  address** while preserving the `Host` header and TLS certificate hostname.
+  Pinning closes DNS rebinding; per-hop revalidation closes redirect-based bypass.
+- `POST /api/feeds/discover` now **requires authentication** (it was open, and
+  makes up to seven outbound requests per call) and is rate limited via
+  `FEEDS_DISCOVER_PER_MINUTE` (default 10).
+- `POST /api/links` applies its rate limit and quota checks *before* the first
+  outbound fetch, and answers `400` instead of `500` for a rejected URL.
+
+### Changed
+- **Breaking for self-hosters:** fetching URLs that resolve to a private or
+  loopback address is now blocked by default. If you save links from hosts on your
+  own LAN, set `ALLOW_PRIVATE_NETWORK_FETCH=true` in `.env`. Keep it `false` on
+  anything reachable from the internet.
+- New settings: `ALLOW_PRIVATE_NETWORK_FETCH` (default `false`),
+  `MAX_FETCH_REDIRECTS` (default `5`), `FEEDS_DISCOVER_PER_MINUTE` (default `10`).
+
 ## [0.1.0] - 2026-05-02
 
 ### Added
