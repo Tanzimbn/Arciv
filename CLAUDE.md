@@ -159,6 +159,32 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 
 `docker compose up` must start the full stack — `db`, `redis`, `api`, `worker`, `bot` — with no manual steps after setting `.env`. The `api` service runs `alembic upgrade head` before launching uvicorn.
 
+## Testing
+
+The suite lives in `tests/`; full setup notes in `tests/README.md`. Two layers:
+
+- **unit** (`tests/test_*.py`) — no services. Encryption + key rotation, storage byte accounting, URL canonicalisation, SSRF guard, heuristics, signup guards, password/JWT primitives.
+- **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search.
+
+```bash
+python3.12 -m venv venv && source venv/bin/activate   # 3.13 has no wheels for asyncpg/pydantic-core at the pinned versions
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check .
+pytest                                    # integration layer skips if services are down
+TEST_DATABASE_URL=… TEST_REDIS_URL=… pytest   # full run
+```
+
+Rules when adding tests:
+
+- **Never mock what the test exists to verify.** Tenancy scoping, quotas and rate limits are enforced by SQL and Redis; assert against the real thing or the test proves nothing.
+- **Quotas and limits default to `0`** (off/unlimited) in `conftest.py`. Opt in per test with `monkeypatch.setattr(settings, "MAX_LINKS_PER_USER", 3)` so every limit is asserted against a value that test set.
+- **The suite must not touch the network.** The `no_network` fixture fails any real outbound HTTP request; patch `embed_text`/provider calls rather than letting them out.
+- **Don't lower the event-loop scope.** `pytest.ini` pins session scope because the app's engine is created at import and its asyncpg connections bind to the creating loop.
+- **`TEST_DATABASE_URL` must name a database ending in `_test`** — `conftest.py` refuses otherwise, because the suite `TRUNCATE`s every table between tests.
+- **A new route that takes an id needs a cross-user 404 case** in `tests/integration/test_tenancy.py`. A new mutation site that writes link fields needs a delta case in `test_storage_deltas.py`.
+
+CI (`.github/workflows/ci.yml`) runs ruff, the full suite against `pgvector/pgvector:pg16` + `redis:7` service containers with `ARCIV_REQUIRE_SERVICES=1` (so a dead service fails the build instead of skipping), and the SPA build. Python is pinned to **3.12** — matches the Dockerfile, and several pins have no 3.13 wheels.
+
 ## Working in this Repo
 
 - **Shell is zsh** on macOS.
