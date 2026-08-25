@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,16 +18,42 @@ from api.schemas.feed import (
     FeedUpdate,
 )
 from api.utils.feed_discovery import discover_feed, entry_guid, parse_feed_content
+from api.utils.ratelimit import enforce_user_rate_limit
+from api.utils.safe_fetch import safe_request
 
 router = APIRouter()
 
 
 @router.post("/discover", response_model=FeedDiscoverResponse)
-async def discover(body: FeedDiscoverRequest):
+async def discover(
+    body: FeedDiscoverRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     """
     Discover a feed feed from a URL.
     """
-    info = await discover_feed(body.url)
+    # Up to seven outbound fetches per call (direct, HTML, five common paths),
+    # which makes this the cheapest way to make the server do work on someone
+    # else's behalf. Limited before any of them go out.
+    await enforce_user_rate_limit(
+        getattr(request.app.state, "arq_pool", None),
+        scope="feeds_discover",
+        user_id=current_user.id,
+        limit=settings.FEEDS_DISCOVER_PER_MINUTE,
+        window=60,
+        detail=(
+            f"Too fast — max {settings.FEEDS_DISCOVER_PER_MINUTE} feed lookups per minute. "
+            "Try again in a moment."
+        ),
+    )
+
+    try:
+        info = await discover_feed(body.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     if not info:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -179,10 +204,9 @@ async def _seed_feed_history(db: AsyncSession, feed: Feed) -> None:
     because new items are notification-only, not auto-saved.
     """
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            resp = await client.get(feed.feed_url)
-            resp.raise_for_status()
-            parsed = parse_feed_content(resp.text)
+        resp, _final_url = await safe_request("GET", feed.feed_url, timeout=5.0)
+        resp.raise_for_status()
+        parsed = parse_feed_content(resp.text)
     except Exception:
         return
 

@@ -6,6 +6,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from api.config import settings
+from api.utils.safe_fetch import parse_url, resolve_and_validate, safe_request
 
 COMMON_PATHS = ["/feed", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"]
 FEED_CONTENT_TYPES = {"rss", "atom", "xml"}
@@ -20,8 +21,22 @@ class FeedInfo:
 
 
 async def discover_feed(url: str) -> FeedInfo | None:
+    """Find a feed at ``url``, or return None.
+
+    Discovery is the most fetch-happy endpoint in the app — up to seven outbound
+    requests per call — so every one of them goes through ``safe_request``. The
+    submitted URL is validated up front too, so an internal address is a clear
+    rejection (``UnsafeURLError`` → 400) rather than an indistinguishable
+    "no feed found".
+    """
+    try:
+        await resolve_and_validate(parse_url(url))
+    except httpx.RequestError:
+        # Unresolvable or unreachable: no feed, not a policy violation.
+        return None
+
     async with httpx.AsyncClient(
-        follow_redirects=True,
+        follow_redirects=False,
         timeout=10.0,
         headers={"User-Agent": settings.USER_AGENT},
     ) as client:
@@ -32,7 +47,7 @@ async def discover_feed(url: str) -> FeedInfo | None:
 
         # Fetch as HTML, look for <link rel="alternate" type="...rss...">
         try:
-            resp = await client.get(url)
+            resp, final_url = await safe_request("GET", url, client=client)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             for tag in soup.find_all("link", rel="alternate"):
@@ -40,7 +55,10 @@ async def discover_feed(url: str) -> FeedInfo | None:
                 if any(t in ctype for t in FEED_CONTENT_TYPES):
                     href = tag.get("href", "")
                     if href:
-                        feed_url = urljoin(str(resp.url), href)
+                        # final_url, not resp.url: the connection is pinned to a
+                        # validated IP, so resp.url is an address and a relative
+                        # href would resolve against that instead of the host.
+                        feed_url = urljoin(final_url, href)
                         info = await _try_parse(client, feed_url)
                         if info:
                             return info
@@ -60,7 +78,7 @@ async def discover_feed(url: str) -> FeedInfo | None:
 
 async def _try_parse(client: httpx.AsyncClient, url: str) -> FeedInfo | None:
     try:
-        resp = await client.get(url)
+        resp, _final_url = await safe_request("GET", url, client=client)
         if resp.status_code != 200:
             return None
         parsed = feedparser.parse(resp.text)
