@@ -777,6 +777,10 @@ any real outbound HTTP request into a test failure.
 | NFR-PUB-05 key custody + rotation | `tests/test_encryption.py`, `test_tenancy.py` (encrypted at rest, masked in responses) |
 | NFR-PUB-07 export + deletion | `tests/integration/test_account_lifecycle.py` |
 | SSRF guard on outbound fetches | `tests/test_ssrf_guard.py` (blocked address classes, hostname resolution, redirect revalidation, connection pinning, per-call-site coverage, drift scan), `tests/integration/test_outbound_guard.py` (feed poll, link create, subscribe seeding, discover auth + limit) |
+| SSRF guard: Ollama `base_url` is user-supplied | `tests/test_ssrf_guard.py` (private `base_url` rejected before any request; public one pinned to the validated address with the `Host` header preserved) |
+| AI errors classified by status code, not message text | `tests/test_provider_errors.py` (401/403 → `AuthError`, 429 → `QuotaError`, 400/404 → `ModelError`, 5xx re-raised unchanged; gemini `.code` and `httpx.HTTPStatusError` shapes; a rejected Gemini key reported as 400 still maps to auth) |
+| Permanent AI failure is terminal and visible | `tests/integration/test_ai_failure_modes.py` (one attempt, no ladder, `ai_error_kind="config"`; `sweep_failed_links` skips config failures but still requeues transient ones; `retry-ai` clears the marker; one notification per user per day regardless of how many links fail) |
+| Per-user model selection + live model listing | `tests/integration/test_ai_models_endpoint.py` (auth required, 422 with no key, 502 carries the provider's message, errors not cached, cache hit skips the provider, cache keyed on credential so a rotation refetches, `AI_MODELS_PER_MINUTE` 429, model round-trip incl. provider switch clearing a stale model) |
 
 ### CI
 

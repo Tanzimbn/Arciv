@@ -1,21 +1,51 @@
 import httpx
 
 from agent.base import AIProvider, AIResult
+from agent.errors import ModelError, raise_mapped
 from agent.prompt import (
-    ParseError,
     SYSTEM_PROMPT,
     build_user_message,
     parse_ai_response,
 )
+from api.utils.safe_fetch import UnsafeURLError, safe_request
 
 
 class OllamaProvider(AIProvider):
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3"):
+    """Ollama over HTTP, at a base URL the *user* supplies.
+
+    That last part is why every request here goes through ``safe_request``:
+    ``make_provider("ollama", api_key)`` passes the user's stored key in as the
+    base URL, so on a hosted instance any signed-up account could otherwise aim
+    the worker at an internal address — and ``list_models`` returns the parsed
+    response to the caller, which would make it a read primitive rather than a
+    blind one. Self-hosters running Ollama on the same box set
+    ``ALLOW_PRIVATE_NETWORK_FETCH=true``, which is exactly what that switch is
+    for.
+    """
+
+    DEFAULT_MODEL = "llama3"
+
+    def __init__(self, base_url: str = "http://localhost:11434", model: str | None = None):
         self._base_url = base_url.rstrip("/")
-        self._model = model
+        self._model = model or self.DEFAULT_MODEL
+
+    async def _post_chat(self, payload: dict) -> str:
+        try:
+            response, _ = await safe_request(
+                "POST", f"{self._base_url}/api/chat", json=payload, timeout=60.0
+            )
+            response.raise_for_status()
+            return response.json()["message"]["content"]
+        except UnsafeURLError as e:
+            # Permanent and user-fixable: the base URL itself is not allowed.
+            raise ModelError(f"Ollama base URL not allowed: {e}") from e
+        except httpx.ConnectError as e:
+            raise ConnectionError(f"Ollama unreachable at {self._base_url}: {e}") from e
+        except Exception as e:
+            raise_mapped(e)
 
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
-        payload = {
+        text = await self._post_chat({
             "model": self._model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -23,37 +53,30 @@ class OllamaProvider(AIProvider):
             ],
             "stream": False,
             "format": "json",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                text = data["message"]["content"]
-                return parse_ai_response(text)
-        except httpx.ConnectError as e:
-            raise ConnectionError(f"Ollama unreachable at {self._base_url}: {e}") from e
-        except httpx.HTTPStatusError as e:
-            msg = str(e)
-            if isinstance(e, ParseError):
-                raise
-            raise RuntimeError(msg) from e
+        })
+        return parse_ai_response(text)
 
     async def generate(self, system: str, user_message: str) -> str:
-        payload = {
+        return await self._post_chat({
             "model": self._model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_message},
             ],
             "stream": False,
-        }
+        })
+
+    async def list_models(self) -> list[str]:
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
-                resp.raise_for_status()
-                return resp.json()["message"]["content"]
+            response, _ = await safe_request(
+                "GET", f"{self._base_url}/api/tags", timeout=15.0
+            )
+            response.raise_for_status()
+            data = response.json()
+        except UnsafeURLError as e:
+            raise ModelError(f"Ollama base URL not allowed: {e}") from e
         except httpx.ConnectError as e:
             raise ConnectionError(f"Ollama unreachable at {self._base_url}: {e}") from e
-        except httpx.HTTPStatusError as e:
-            raise RuntimeError(str(e)) from e
+        except Exception as e:
+            raise_mapped(e)
+        return sorted(m["name"] for m in data.get("models", []) if m.get("name"))

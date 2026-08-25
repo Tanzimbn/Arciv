@@ -165,6 +165,7 @@ async def _fetch_chain(
     headers: dict[str, str] | None,
     max_redirects: int,
     stream: bool,
+    json_body: object | None = None,
 ) -> tuple[httpx.Response, str]:
     """Walk the redirect chain, validating and pinning each hop.
 
@@ -182,6 +183,7 @@ async def _fetch_chain(
             method,
             pinned,
             headers={**(headers or {}), **host_headers},
+            json=json_body,
             extensions={"sni_hostname": current.host},
         )
         response = await client.send(request, stream=stream, follow_redirects=False)
@@ -191,6 +193,13 @@ async def _fetch_chain(
             return response, str(current)
 
         await response.aclose()
+        # Standard redirect semantics, matching httpx and browsers: 301/302/303
+        # turn a non-idempotent request into a GET and drop its body; only
+        # 307/308 replay method and body. Getting this wrong would re-POST a
+        # payload to a host we were merely pointed at.
+        if response.status_code in (301, 302, 303) and method.upper() not in ("GET", "HEAD"):
+            method = "GET"
+            json_body = None
         # Join against the *logical* URL, so a relative Location can't be
         # re-anchored onto the pinned address.
         current = current.join(location)
@@ -209,6 +218,7 @@ async def safe_request(
     timeout: float = 10.0,
     max_redirects: int | None = None,
     client: httpx.AsyncClient | None = None,
+    json: object | None = None,
 ) -> tuple[httpx.Response, str]:
     """Fetch ``url`` with the body read, validating and pinning every hop.
 
@@ -223,6 +233,9 @@ async def safe_request(
 
     Pass ``client`` to reuse one connection pool across several fetches (feed
     discovery probes a handful of paths); ownership stays with the caller then.
+
+    ``json`` sends a JSON request body — needed by the Ollama provider, whose
+    ``base_url`` is user-supplied and so has to come through here too.
     """
     if max_redirects is None:
         max_redirects = settings.MAX_FETCH_REDIRECTS
@@ -231,7 +244,9 @@ async def safe_request(
     if client is None:
         client = httpx.AsyncClient(follow_redirects=False, timeout=timeout)
     try:
-        return await _fetch_chain(client, method, url, headers, max_redirects, False)
+        return await _fetch_chain(
+            client, method, url, headers, max_redirects, False, json_body=json
+        )
     finally:
         if owns_client:
             await client.aclose()

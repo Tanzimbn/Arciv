@@ -161,9 +161,24 @@ def rewrap_secret(blob: str) -> str:
 
 
 def mask_api_key(key: str) -> str:
-    """
-    Masking key in (key[:4] + "..." + "****") format
+    """A key the user can *recognise*, without handing back the secret.
+
+    The tail is the identifying part. Every key from a provider shares its
+    prefix — ``gsk_``, ``sk-proj-``, ``sk-ant-api03-`` — so a prefix-only mask
+    says which provider issued it and nothing about *which key it is*: someone
+    who rotated a key cannot tell the new one from the old one, which is exactly
+    when they need to. Four trailing characters is the industry convention
+    (Stripe, AWS, GitHub) and leaves the remaining entropy untouched.
+
+    Revealed at most 8 characters, and only from a key long enough that those 8
+    are a small fraction of it:
+
+    * ``len <= 8``  → ``****``            (the whole thing would be on show)
+    * ``len < 16``  → ``abcd...****``     (too short to spare a tail)
+    * otherwise     → ``gsk_...cdef``
     """
     if len(key) <= 8:
         return "****"
-    return key[:4] + "..." + "****"
+    if len(key) < 16:
+        return key[:4] + "..." + "****"
+    return key[:4] + "..." + key[-4:]

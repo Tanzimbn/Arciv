@@ -355,6 +355,9 @@ async def retry_ai(
     link.ai_status = "pending"
     link.ai_attempt_count = 0
     link.ai_error = None
+    # Must clear, or a user who fixed their model/key in Settings could never get
+    # this link off the terminal state — the sweep skips ai_error_kind="config".
+    link.ai_error_kind = None
     link.ai_next_retry_at = None
     await db.commit()
     await db.refresh(link)
@@ -394,7 +397,7 @@ async def generate_insights(
     if current_user.ai_api_key_enc:
         try:
             api_key = decrypt_secret(current_user.ai_api_key_enc)
-            provider = make_provider(current_user.ai_provider, api_key)
+            provider = make_provider(current_user.ai_provider, api_key, current_user.ai_model)
         except Exception:
             pass
     if provider is None and settings.SHARED_GEMINI_KEY:

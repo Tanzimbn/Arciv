@@ -395,6 +395,45 @@ async def test_seed_feed_history_does_not_fetch_a_blocked_url(resolver, fake_htt
     assert not fake_http.requests
 
 
+async def test_ollama_base_url_pointing_inside_is_rejected(resolver, fake_http):
+    """`ai_provider="ollama"` makes the stored api_key a base URL, so on a hosted
+    instance any signed-up account could aim the worker at an internal address.
+    `list_models` would hand the parsed response back to the caller, turning a
+    blind probe into a read primitive — so the guard has to run before connect.
+    """
+    from agent.providers.ollama import OllamaProvider
+    from agent.errors import ModelError
+
+    resolver.map["ollama.internal"] = ["172.20.0.2"]
+    provider = OllamaProvider(base_url="http://ollama.internal:11434")
+
+    with pytest.raises(ModelError, match="not allowed"):
+        await provider.list_models()
+    with pytest.raises(ModelError, match="not allowed"):
+        await provider.classify_and_summarise(title="t", content="c", url="https://example.com")
+
+    assert not fake_http.requests
+
+
+async def test_ollama_request_is_pinned_to_the_validated_address(resolver, fake_http):
+    """A public base URL still goes out pinned: the connection targets the
+    address that was checked, with the hostname preserved in the Host header, so
+    a second DNS answer cannot redirect it (rebinding)."""
+    from agent.providers.ollama import OllamaProvider
+
+    resolver.map["ollama.example.com"] = [PUBLIC_IP]
+    fake_http.handler = lambda request: httpx.Response(
+        200, json={"models": [{"name": "llama3:8b"}, {"name": "qwen2"}]}
+    )
+
+    models = await OllamaProvider(base_url="http://ollama.example.com").list_models()
+
+    assert models == ["llama3:8b", "qwen2"]
+    request = fake_http.last()
+    assert request.url.host == PUBLIC_IP
+    assert request.headers["host"] == "ollama.example.com"
+
+
 def test_no_module_fetches_a_user_url_outside_safe_fetch():
     """Drift guard: three fetchers reached production with no check because each
     call site rolled its own httpx client. A new one must not.
@@ -412,6 +451,8 @@ def test_no_module_fetches_a_user_url_outside_safe_fetch():
         "api/routers/links.py",
         "api/routers/feeds.py",
         "worker/feed_poll.py",
+        # base_url is the user's stored ai_api_key — a user URL like any other.
+        "agent/providers/ollama.py",
     ]
     direct_call = re.compile(r"\b(?:httpx|client)\.(?:get|post|stream|request)\(")
 

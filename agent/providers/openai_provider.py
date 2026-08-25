@@ -1,10 +1,8 @@
 from openai import AsyncOpenAI
 
 from agent.base import AIProvider, AIResult
+from agent.errors import raise_mapped
 from agent.prompt import (
-    AuthError,
-    ParseError,
-    QuotaError,
     SYSTEM_PROMPT,
     build_user_message,
     parse_ai_response,
@@ -12,9 +10,11 @@ from agent.prompt import (
 
 
 class OpenAIProvider(AIProvider):
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    DEFAULT_MODEL = "gpt-4o-mini"
+
+    def __init__(self, api_key: str, model: str | None = None):
         self._client = AsyncOpenAI(api_key=api_key)
-        self._model = model
+        self._model = model or self.DEFAULT_MODEL
 
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
         try:
@@ -29,14 +29,7 @@ class OpenAIProvider(AIProvider):
             )
             return parse_ai_response(response.choices[0].message.content)
         except Exception as e:
-            msg = str(e)
-            if "401" in msg or "invalid_api_key" in msg.lower():
-                raise AuthError(msg) from e
-            if "429" in msg or "rate_limit" in msg.lower():
-                raise QuotaError(msg) from e
-            if isinstance(e, ParseError):
-                raise
-            raise
+            raise_mapped(e)
 
     async def generate(self, system: str, user_message: str) -> str:
         try:
@@ -50,9 +43,24 @@ class OpenAIProvider(AIProvider):
             )
             return response.choices[0].message.content
         except Exception as e:
-            msg = str(e)
-            if "401" in msg or "invalid_api_key" in msg.lower():
-                raise AuthError(msg) from e
-            if "429" in msg or "rate_limit" in msg.lower():
-                raise QuotaError(msg) from e
-            raise
+            raise_mapped(e)
+
+    # The raw list is mostly whisper / tts / dall-e / embedding / moderation
+    # models. Offering those would guarantee the failure this endpoint exists to
+    # prevent, so keep only the chat-completion families.
+    _CHAT_PREFIXES = ("gpt", "o1", "o3", "o4", "chatgpt")
+    # Some `gpt-*` ids are image, audio or realtime endpoints, not chat.
+    _NOT_CHAT = ("image", "audio", "transcribe", "tts", "realtime", "search-preview")
+
+    async def list_models(self) -> list[str]:
+        try:
+            response = await self._client.models.list()
+        except Exception as e:
+            raise_mapped(e)
+        return sorted(
+            m.id
+            for m in response.data
+            if getattr(m, "id", None)
+            and m.id.lower().startswith(self._CHAT_PREFIXES)
+            and not any(x in m.id.lower() for x in self._NOT_CHAT)
+        )

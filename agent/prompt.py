@@ -2,6 +2,9 @@ import json
 
 from agent.base import AIResult
 
+# Re-exported so providers import prompts and the error taxonomy from one place.
+from agent.errors import AuthError, ModelError, ParseError, QuotaError  # noqa: F401
+
 CONTENT_TYPES = ["video", "article", "research-paper", "tool", "newsletter", "documentation", "other"]
 QUEUES = ["watch-later", "read-later", "try-later"]
 
@@ -75,18 +78,6 @@ def parse_insights_response(text: str) -> list[str]:
     if not isinstance(data, list):
         raise ParseError("Expected a JSON array")
     return [str(item).strip() for item in data if str(item).strip()][:10]
-
-
-class ParseError(Exception):
-    pass
-
-
-class AuthError(Exception):
-    pass
-
-
-class QuotaError(Exception):
-    pass
 
 
 def parse_ai_response(text: str) -> AIResult:

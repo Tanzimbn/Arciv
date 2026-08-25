@@ -87,17 +87,73 @@ arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 **AI provider interface** — all providers implement one interface, swappable via settings:
 ```python
 class AIProvider:
+    DEFAULT_MODEL: str                      # used when users.ai_model is NULL
+
+    def __init__(self, api_key: str, model: str | None = None): ...
+
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
         ...
+
+    async def list_models(self) -> list[str]:   # the provider's own catalogue
+        ...
 ```
+
+**Model is a per-user setting, never a constant.** `users.ai_model` (`String(100)`,
+nullable; NULL = that provider's `DEFAULT_MODEL`) is threaded through
+`make_provider(provider, api_key, model=None)` by all three call sites —
+`worker/ai_classify._get_provider`, `POST /links/:id/insights`,
+`POST /settings/ai/test`. `POST /api/settings/ai/models` lists what a key can
+actually reach by calling the provider's own list endpoint, cached in Redis at
+`ai_models:<provider>:<sha256(key)[:16]>` for `AI_MODELS_CACHE_TTL` (`0` = no
+cache; Redis rejects `SET … EX 0`, so the write must be skipped, not passed
+through) and rate limited by `AI_MODELS_PER_MINUTE`. It is a POST because the
+body may carry `{provider, api_key}` for a key the user has typed but not saved —
+listing models is the cheapest credential check there is, so it doubles as
+"is this key valid?" and nothing has to be persisted first; a secret must never
+travel in a URL. A refused key is a **400** (`AuthError`), a provider outage a
+**502**, so the UI can name the field to fix instead of blaming upstream.
+Neither is cached. Never hardcode a model as
+the only way to reach a provider — a provider retiring one must be fixable in
+Settings, not by a redeploy. `update_settings` clears `ai_model` when
+`ai_provider` changes without a model in the same PATCH, or a stale id 404s every
+classify. Unknown provider names raise `ValueError`; they do not fall back to
+Gemini.
+
+**Permanent AI errors are terminal; only transient ones retry.** `agent/errors.py`
+classifies by **status code**, not message substrings (`raise_mapped`): `401/403 →
+AuthError`, `429 → QuotaError`, `400/404 → ModelError`, anything else re-raised as
+transient. On a fixed SDK endpoint the model name is the only user-controlled part
+of the request, so 400/404 means the config is wrong. `ModelError` and `AuthError`
+set `links.ai_error_kind = "config"` and fail the link on the **first** attempt —
+no backoff ladder — and `sweep_failed_links` filters them out with
+`Link.ai_error_kind.is_distinct_from("config")` (a plain `!= "config"` is NULL for
+every pre-existing row and would silently stop retrying *all* transient failures).
+`POST /links/:id/retry-ai` clears the marker. Each failure branch that writes
+`ai_error` must account its bytes (`ai_error` is in `storage._TEXT_FIELDS`), and
+`_notify_ai_config_broken` raises one in-app notification per user per day, guarded
+by `SET ai_config_alert:<user_id> NX EX 86400`.
+
+**Provider error text is cleaned only at user-facing boundaries.**
+`agent/errors.human_message` turns an SDK's `Error code: 401 - {'error':
+{'message': 'Invalid API Key', 'code': 'expired_api_key'}}` into `Invalid API Key
+(expired_api_key)` — the provider's own sentence plus the machine code, which is
+the part that says *which* fix applies. It parses the payload (`ast.literal_eval`
+→ `json.loads` → regex) and walks it, because providers nest the message
+differently (`{"error": {"message": …}}` for Groq/OpenAI, a bare `{"error": "…"}`
+for Ollama). Unparseable text falls through **verbatim** — the raw string is then
+the only clue the user has, so never replace it with a friendlier invented
+message. Use it in exactly three places: the `/settings/ai/models` 400/502
+`detail`, `/settings/ai/test`'s `message`, and the `ai_config` notification body.
+`links.ai_error` and the worker logs keep the raw string; they are for debugging,
+not reading.
 
 **Persistent job queue.** ARQ jobs are Redis-backed. Server restarts must not lose pending jobs. AI retry schedule: immediate → 2 min → 10 min → 1 hour → mark `ai-failed`.
 
 **All data scoped by `user_id`.** Every DB query must include a `user_id` filter. No cross-user access is possible.
 
-**API keys encrypted at rest.** `ai_api_key_enc` in the DB uses AES-256 (`api/utils/encryption.py`). Keys are never returned in API responses — only a masked version (`sk-...****`).
+**API keys encrypted at rest.** `ai_api_key_enc` in the DB uses AES-256 (`api/utils/encryption.py`). Keys are never returned in API responses — only a masked version (`sk-1...cdef` — first 4 and last 4; the tail is the part that identifies *which* key it is, since every key from a provider shares its prefix, and keys under 16 chars get no tail at all). One key per account, not one per provider: `ai_api_key_enc` is a single column used with whatever `ai_provider` is set to, so the stored key belongs to the saved provider and Settings must not present it under another one.
 
-**User-supplied URLs are fetched only via `api/utils/safe_fetch.py`.** `safe_request` / `safe_stream` resolve the host, reject it if any address is private/loopback/link-local/reserved/CGNAT, and pin the connection to the validated address (`Host` header + TLS SNI keep the real hostname), revalidating every redirect hop. They return `(response, logical_url)` — use `logical_url`, never `response.url` (which is the pinned IP), or canonicalisation and `UNIQUE (user_id, canonical_url)` dedup break silently. Never add a bare `httpx` call on a user URL; `tests/test_ssrf_guard.py::test_no_module_fetches_a_user_url_outside_safe_fetch` scans for it. Operator-configured clients (mailer, Turnstile, Ollama, embed service) take no user input and stay outside this. `ALLOW_PRIVATE_NETWORK_FETCH=true` reopens private targets for LAN self-hosters.
+**User-supplied URLs are fetched only via `api/utils/safe_fetch.py`.** `safe_request` / `safe_stream` resolve the host, reject it if any address is private/loopback/link-local/reserved/CGNAT, and pin the connection to the validated address (`Host` header + TLS SNI keep the real hostname), revalidating every redirect hop. They return `(response, logical_url)` — use `logical_url`, never `response.url` (which is the pinned IP), or canonicalisation and `UNIQUE (user_id, canonical_url)` dedup break silently. Never add a bare `httpx` call on a user URL; `tests/test_ssrf_guard.py::test_no_module_fetches_a_user_url_outside_safe_fetch` scans for it. Operator-configured clients (mailer, Turnstile, embed service) take no user input and stay outside this. **`agent/providers/ollama.py` is not one of them**: `make_provider("ollama", api_key)` passes the user's stored `ai_api_key` in as `base_url`, so all three of its requests (`/api/chat` ×2, `/api/tags`) go through `safe_request` and the module is in the drift-scan watch list. `safe_request` accepts a `json` body for this; a 301/302/303 hop drops the body and switches to GET, per RFC. `ALLOW_PRIVATE_NETWORK_FETCH=true` reopens private targets for LAN self-hosters.
 
 **Shared Gemini key has a per-user daily cap.** When a user has not configured their own provider, `worker/ai_classify._get_provider` falls back to `SHARED_GEMINI_KEY` only up to `SHARED_DAILY_LIMIT` (currently 20) calls per user per day, tracked in Redis at `ai_usage:<user_id>:<YYYY-MM-DD>`. Past the cap, the link's `ai_status` stays `pending`.
 

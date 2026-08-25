@@ -49,6 +49,10 @@ class Link(Base):
     ai_status: Mapped[str] = mapped_column(String(30), default="pending")
     ai_provider_used: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ai_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "config" marks a permanent, user-fixable failure (bad model, revoked
+    # key). NULL means transient, so pre-existing rows keep being retried.
+    # sweep_failed_links skips 'config' — see worker/ai_classify.py.
+    ai_error_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
     ai_raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     ai_attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     ai_next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

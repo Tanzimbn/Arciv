@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, clearTokens } from "../api/client.js";
 import SubpageNav from "../components/SubpageNav.jsx";
-import { ProviderPicker } from "../components/ProviderPicker.jsx";
+import { ModelPicker, PROVIDERS, ProviderPicker } from "../components/ProviderPicker.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 /* ── Icons ────────────────────────────────────────────────── */
@@ -78,10 +78,10 @@ function FieldLabel({ children }) {
 }
 
 /* ── Text input ───────────────────────────────────────────── */
-function Field({ type = "text", value, onChange, placeholder, focused, onFocus, onBlur }) {
+function Field({ type = "text", value, onChange, placeholder, focused, onFocus, onBlur, onKeyDown }) {
   return (
     <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-      onFocus={onFocus} onBlur={onBlur}
+      onFocus={onFocus} onBlur={onBlur} onKeyDown={onKeyDown}
       style={{
         width: "100%", border: `1.5px solid ${focused ? "var(--accent)" : "var(--line)"}`,
         borderRadius: 10, padding: "10px 13px", fontSize: 13.5,
@@ -135,7 +135,12 @@ export default function SettingsView({ onBack }) {
   const [settings, setSettings] = useState(null);
   const [usage, setUsage] = useState(null);
   const [provider, setProvider] = useState("gemini");
+  // "" = the provider default, matching ai_model NULL on the server.
+  const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  // The key the user has *submitted* for checking, which is not the same thing
+  // as the key they are typing: nothing is sent to a provider until they ask.
+  const [checkedKey, setCheckedKey] = useState("");
   const [notifyTelegram, setNotifyTelegram] = useState(false);
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [usernameInput, setUsernameInput] = useState("");
@@ -163,6 +168,7 @@ export default function SettingsView({ onBack }) {
     api.getSettings().then(s => {
       setSettings(s);
       setProvider(s.ai_provider || "gemini");
+      setModel(s.ai_model || "");
       setNotifyTelegram(s.feed_notify_telegram);
       setNotifyInApp(s.feed_notify_inapp);
       setUsernameInput(s.username ?? "");
@@ -175,10 +181,19 @@ export default function SettingsView({ onBack }) {
     e.preventDefault();
     setSaving(true); setError(""); setSuccess("");
     try {
-      const patch = { ai_provider: provider, feed_notify_telegram: notifyTelegram, feed_notify_inapp: notifyInApp };
+      // ai_model always goes with ai_provider: the server clears a stale model on a
+      // provider switch only when the same PATCH omits one, so sending both keeps
+      // an explicit choice and an explicit "" (provider default) both meaningful.
+      const patch = {
+        ai_provider: provider, ai_model: model,
+        feed_notify_telegram: notifyTelegram, feed_notify_inapp: notifyInApp,
+      };
       if (apiKey) patch.ai_api_key = apiKey;
       const updated = await api.updateSettings(patch);
-      setSettings(updated); setApiKey(""); setSuccess("Settings saved.");
+      setSettings(updated); setModel(updated.ai_model || "");
+      // The draft is now the stored key; drop both so the picker re-lists against
+      // what was actually saved rather than a copy of it.
+      setApiKey(""); setCheckedKey(""); setSuccess("Settings saved.");
     } catch { setError("Failed to save settings."); }
     finally { setSaving(false); }
   }
@@ -191,8 +206,13 @@ export default function SettingsView({ onBack }) {
   }
 
   async function handleClearKey() {
-    try { setSettings(await api.updateSettings({ ai_api_key: "" })); }
-    catch { setError("Failed to clear key."); }
+    // There is one key per account (`users.ai_api_key_enc`), not one per
+    // provider, so this removes the account's key outright — see the note in the
+    // API Key field.
+    try {
+      setSettings(await api.updateSettings({ ai_api_key: "" }));
+      setApiKey(""); setCheckedKey("");
+    } catch { setError("Failed to clear key."); }
   }
 
   async function handleSaveUsername() {
@@ -250,6 +270,16 @@ export default function SettingsView({ onBack }) {
       setDeleting(false);
     }
   }
+
+  const keyDraft = apiKey.trim();
+  const keyReadyToCheck = !!keyDraft && keyDraft !== checkedKey;
+  const keyAlreadyChecked = !!keyDraft && keyDraft === checkedKey;
+  // The stored key is the *saved* provider's, so a badge under a freshly picked
+  // provider would be claiming a credential that isn't there.
+  const keyMatchesSelectedProvider = !!settings?.ai_api_key_masked && provider === settings.ai_provider;
+  const labelOf = id => PROVIDERS.find(x => x.id === id)?.label || id;
+  const selectedProviderLabel = labelOf(provider);
+  const savedProviderLabel = labelOf(settings?.ai_provider);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
@@ -337,32 +367,121 @@ export default function SettingsView({ onBack }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 <div>
                   <FieldLabel>Provider</FieldLabel>
-                  <ProviderPicker value={provider} isMobile={isMobile} onChange={p => { setProvider(p); setTestResult(null); }} />
+                  {/* A check is per provider: a key verified against Groq says
+                      nothing about OpenAI, so switching drops it (the typed key
+                      is kept — it may well be the key for the new provider). */}
+                  <ProviderPicker value={provider} isMobile={isMobile}
+                    onChange={p => { setProvider(p); setModel(""); setCheckedKey(""); setTestResult(null); }} />
+                </div>
+
+                <div>
+                  <FieldLabel>Model</FieldLabel>
+                  {/* checkedKey is the unsaved key the user submitted with "Check
+                      key" below: the picker lists models for *that* key, so a bad
+                      key is caught before saving — but only when asked, never per
+                      keystroke. */}
+                  <ModelPicker
+                    provider={provider}
+                    savedProvider={settings.ai_provider}
+                    savedKeyHint={settings.ai_api_key_masked || ""}
+                    apiKeyChecked={checkedKey}
+                    keyAwaitingCheck={!!apiKey.trim() && apiKey.trim() !== checkedKey}
+                    sharedAvailable={!!settings.shared_ai_available}
+                    value={model}
+                    onChange={m => { setModel(m); setTestResult(null); }}
+                  />
                 </div>
 
                 <div>
                   <FieldLabel>API Key</FieldLabel>
+                  {/* One key per account, not one per provider: `ai_api_key_enc`
+                      is a single column, used with whatever `ai_provider` is set
+                      to. So the stored key belongs to the *saved* provider, and
+                      claiming it under a different one would be a lie — hence the
+                      two states below. Clear removes that one key for good. */}
                   {settings.ai_api_key_masked && (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 13px", marginBottom: 8,
-                      background: "var(--surface-2)", borderRadius: 10, border: "1.5px solid var(--line-2)",
-                    }}>
-                      <I.key />
-                      <span style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "monospace", flex: 1, letterSpacing: "0.05em" }}>{settings.ai_api_key_masked}</span>
-                      <button type="button" onClick={handleClearKey}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--bad)", background: "var(--bad-tint)", border: "1px solid color-mix(in oklab, var(--bad) 25%, transparent)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
-                        <I.trash /> Clear
-                      </button>
-                    </div>
+                    keyMatchesSelectedProvider ? (
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                        padding: "10px 13px", marginBottom: 8,
+                        background: "var(--good-tint)", borderRadius: 10,
+                        border: "1.5px solid color-mix(in oklab, var(--good) 25%, transparent)",
+                      }}>
+                        <span style={{ color: "var(--good)", display: "inline-flex" }}><I.key /></span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--good)" }}>
+                          {selectedProviderLabel} key saved
+                        </span>
+                        <span style={{ fontSize: 12.5, color: "var(--ink-2)", fontFamily: "monospace", flex: 1, letterSpacing: "0.04em", minWidth: 110 }}>
+                          {settings.ai_api_key_masked}
+                        </span>
+                        <button type="button" onClick={handleClearKey} title="Remove this account's stored key"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--bad)", background: "var(--bad-tint)", border: "1px solid color-mix(in oklab, var(--bad) 25%, transparent)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
+                          <I.trash /> Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: "flex", flexDirection: "column", gap: 6,
+                        padding: "10px 13px", marginBottom: 8,
+                        background: "var(--surface-2)", borderRadius: 10, border: "1.5px solid var(--line-2)",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <I.key />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>
+                            {savedProviderLabel} key saved
+                          </span>
+                          <span style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "monospace", flex: 1, letterSpacing: "0.04em", minWidth: 110 }}>
+                            {settings.ai_api_key_masked}
+                          </span>
+                          <button type="button" onClick={handleClearKey} title="Remove this account's stored key"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--bad)", background: "var(--bad-tint)", border: "1px solid color-mix(in oklab, var(--bad) 25%, transparent)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
+                            <I.trash /> Clear
+                          </button>
+                        </div>
+                        <span style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}>
+                          Nothing is stored for {selectedProviderLabel}. Paste a
+                          {" "}{selectedProviderLabel} key below and save — it replaces the
+                          {" "}{savedProviderLabel} one, since an account holds a single key.
+                        </span>
+                      </div>
+                    )
                   )}
                   <Field
                     type="password" value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
+                    onKeyDown={e => {
+                      // Enter inside the form would submit — i.e. save a key that
+                      // has never been checked. Check it instead.
+                      if (e.key === "Enter") { e.preventDefault(); if (keyReadyToCheck) setCheckedKey(apiKey.trim()); }
+                    }}
                     placeholder={settings.ai_api_key_masked ? "Enter new key to replace current" : "Paste your API key here"}
                     focused={focused === "apikey"}
                     onFocus={() => setFocused("apikey")} onBlur={() => setFocused(null)}
                   />
+                  {/* Checking is deliberately a button. The listing is a real
+                      request against the provider with the typed key, so firing it
+                      per keystroke both billed a request per pause and reported
+                      every prefix of a good key as "rejected". */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+                    <button type="button" onClick={() => setCheckedKey(apiKey.trim())} disabled={!keyReadyToCheck}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "7px 13px", fontSize: 12.5, fontWeight: 600, borderRadius: 9,
+                        border: `1.5px solid ${keyReadyToCheck ? "var(--accent)" : "var(--line)"}`,
+                        background: keyReadyToCheck ? "var(--accent-tint)" : "var(--surface-2)",
+                        color: keyReadyToCheck ? "var(--accent)" : "var(--muted-2)",
+                        cursor: keyReadyToCheck ? "pointer" : "default",
+                      }}>
+                      <I.check /> Check key
+                    </button>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45 }}>
+                      {keyReadyToCheck
+                        ? "Lists the models this key can reach. Nothing is billed, nothing is saved yet."
+                        : keyAlreadyChecked
+                          ? "Key checked. Save to start using it."
+                          : "Verifies a key before you save it."}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Test row */}

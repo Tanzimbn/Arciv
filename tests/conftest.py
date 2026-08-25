@@ -108,6 +108,8 @@ _REDIS_PREFIXES = (
     "embed:q:",
     "stats:",
     "ai_usage:",
+    "ai_config_alert:",
+    "ai_models:",
     "arciv:",
     "LIMITER",  # slowapi / limits storage
 )
@@ -259,8 +261,8 @@ class FakeArqPool:
     async def get(self, key):
         return await self._redis.get(key)
 
-    async def set(self, key, value, ex=None):
-        return await self._redis.set(key, value, ex=ex)
+    async def set(self, key, value, ex=None, nx=False):
+        return await self._redis.set(key, value, ex=ex, nx=nx)
 
 
 def canonicalize_offline(url: str) -> str:

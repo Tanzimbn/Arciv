@@ -137,15 +137,21 @@ All configuration is via `.env`. See [.env.example](.env.example) for every vari
 
 Configure your provider in **Settings**. The system uses one provider at a time per user; API keys are encrypted with AES-256 before they hit the database.
 
+**Model** is also chosen in Settings, per user. The dropdown is populated live from your provider's own catalogue using your key, so a model your account can't reach never appears. Leave it on *Provider default* to use the model below. Providers retire models on their own schedule — picking a new one in Settings is the fix, no redeploy.
+
 | Provider | Default model | Cost | Notes |
 |---|---|---|---|
 | **Google Gemini** | `gemini-2.0-flash` | Free tier available | Default. Free-tier quota varies by region. |
-| **Groq** | `llama-3.1-8b-instant` | Free tier available | Fast inference, generous free quota. |
+| **Groq** | `llama-3.3-70b-versatile` | Free tier available | Fast inference, generous free quota. |
 | **Anthropic Claude** | `claude-haiku-4-5` | Paid | Best quality for the cost. |
 | **OpenAI** | `gpt-4o-mini` | Paid | Industry standard. |
-| **Ollama** | Local | Free | Self-host the model alongside Arciv. |
+| **Ollama** | `llama3` | Free | Self-host the model alongside Arciv. Set `ALLOW_PRIVATE_NETWORK_FETCH=true` if it runs on the same box. |
 
-**Retry behavior:** AI jobs retry on transient errors at 2 min → 10 min → 1 hour, then mark `ai-failed`. Failed jobs are swept back into the queue hourly. If your account has zero quota (`limit: 0`), all retries will fail — switch providers or top up.
+The defaults are current at the time of writing, not a guarantee — they are the value used when you pick no model.
+
+**Retry behavior:** AI jobs retry on *transient* errors (provider 5xx, rate limits) at 2 min → 10 min → 1 hour, then mark `ai-failed`; failed jobs are swept back into the queue hourly.
+
+*Permanent* errors are not retried. A retired or unknown model, or a rejected API key, fails the link immediately and raises one in-app notification carrying the provider's own message — retrying an identical request that cannot succeed only hides the problem. Fix the model or key in Settings, then hit **Retry** on the link. If your account has zero quota (`limit: 0`), all retries will fail — switch providers or top up.
 
 ## Feed Tracking
 
