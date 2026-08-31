@@ -181,7 +181,11 @@ async def test_settings_never_return_the_raw_api_key(client, app_state, make_use
 
     r = await client.get("/api/settings", headers=alice)
     assert "supersecret" not in r.text
-    assert r.json()["ai_api_key_masked"] == "sk-s...****"
+    # Recognisable, not reusable: the tail identifies which key this is (every
+    # key from a provider shares its prefix), the middle never leaves the DB.
+    masked = r.json()["ai_api_key_masked"]
+    assert masked == "sk-s...-123"
+    assert "supersecret" not in masked
 
 
 async def test_stored_api_key_is_encrypted_at_rest(client, app_state, make_user, session_factory):

@@ -395,6 +395,95 @@ async def test_seed_feed_history_does_not_fetch_a_blocked_url(resolver, fake_htt
     assert not fake_http.requests
 
 
+async def test_ollama_cloud_requests_are_pinned_and_carry_the_key(resolver, fake_http):
+    """Ollama is the one provider we call over plain HTTP rather than an SDK.
+
+    The base URL is a constant now, so this is no longer about SSRF — it is that
+    every one of these requests carries the user's API key, and ``safe_fetch`` is
+    what validates each redirect hop before the key travels over it. The
+    connection targets the address that was checked, with the hostname preserved
+    in the Host header, so a second DNS answer cannot redirect it (rebinding).
+    """
+    from agent.providers.ollama import OllamaProvider
+
+    def handler(request):
+        if request.url.path == "/api/ps":
+            return httpx.Response(200, json={"models": []})
+        return httpx.Response(200, json={"models": [{"name": "gpt-oss:120b"}]})
+
+    fake_http.handler = handler
+
+    models = await OllamaProvider("k3y").list_models()
+
+    assert models == ["gpt-oss:120b"]
+    assert [r.url.path for r in fake_http.requests] == ["/api/ps", "/api/tags"]
+    for request in fake_http.requests:
+        assert request.url.host == PUBLIC_IP           # pinned
+        assert request.headers["host"] == "ollama.com"  # real name preserved
+        assert request.headers["authorization"] == "Bearer k3y"
+
+
+async def test_authorization_is_dropped_when_a_redirect_changes_origin(
+    resolver, fake_http
+):
+    """A credential we attach must not leak to a third party.
+
+    httpx strips credentials across origins itself, but ``_fetch_chain`` follows
+    redirects by hand, so it has to reimplement that: a host (or anyone who takes
+    over its DNS) answering ``302 Location: http://evil.test/`` would otherwise
+    be handed the ``Authorization`` header on the next hop. The Ollama Cloud API
+    key is the credential this currently protects.
+    """
+    resolver.map = {"upstream.test": [PUBLIC_IP], "evil.test": [PUBLIC_IP]}
+
+    def handler(request):
+        if request.headers["host"] == "upstream.test":
+            return httpx.Response(302, headers={"Location": "http://evil.test/steal"})
+        return httpx.Response(200, text="ok")
+
+    fake_http.handler = handler
+
+    await safe_request(
+        "GET",
+        "http://upstream.test/api/tags",
+        headers={"Authorization": "Bearer s3cr3t", "Cookie": "sid=1"},
+    )
+
+    first, second = fake_http.requests
+    assert first.headers["authorization"] == "Bearer s3cr3t"
+    assert "authorization" not in second.headers
+    assert "cookie" not in second.headers
+
+
+async def test_authorization_survives_a_same_origin_redirect(resolver, fake_http):
+    """Dropping it on every hop would break the ordinary case: a host that
+    redirects ``/api/tags`` to ``/api/tags/`` is same-origin, and the credential
+    is exactly what the next hop needs."""
+    resolver.map["upstream.test"] = [PUBLIC_IP]
+    hops = []
+
+    def handler(request):
+        hops.append(request)
+        if len(hops) == 1:
+            return httpx.Response(
+                301, headers={"Location": "http://upstream.test/api/tags/"}
+            )
+        return httpx.Response(200, text="ok")
+
+    fake_http.handler = handler
+
+    await safe_request(
+        "GET",
+        "http://upstream.test/api/tags",
+        headers={"Authorization": "Bearer s3cr3t"},
+    )
+
+    assert [r.headers.get("authorization") for r in fake_http.requests] == [
+        "Bearer s3cr3t",
+        "Bearer s3cr3t",
+    ]
+
+
 def test_no_module_fetches_a_user_url_outside_safe_fetch():
     """Drift guard: three fetchers reached production with no check because each
     call site rolled its own httpx client. A new one must not.
@@ -412,6 +501,9 @@ def test_no_module_fetches_a_user_url_outside_safe_fetch():
         "api/routers/links.py",
         "api/routers/feeds.py",
         "worker/feed_poll.py",
+        # The URL is a constant, but every request carries the user's API key
+        # and must keep safe_fetch's per-hop revalidation and credential strip.
+        "agent/providers/ollama.py",
     ]
     direct_call = re.compile(r"\b(?:httpx|client)\.(?:get|post|stream|request)\(")
 

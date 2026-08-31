@@ -3,7 +3,7 @@ from arq.connections import RedisSettings
 
 from agent.embedding import warm_model
 from api.config import settings
-from worker.ai_classify import classify_link, sweep_failed_links
+from worker.ai_classify import JOB_TIMEOUT_SECONDS, classify_link, sweep_failed_links
 from worker.email import send_email_job
 from worker.embed import backfill_embeddings, embed_link
 from worker.feed_poll import poll_all_feeds, poll_single_feed
@@ -39,7 +39,9 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     cron_jobs = _cron_jobs
     max_jobs = 10
-    job_timeout = 120
+    # Defined in worker/ai_classify.py: the Redis slot TTLs and the
+    # "processing" watchdog stamp both have to agree with this number.
+    job_timeout = JOB_TIMEOUT_SECONDS
     # Slow idle Redis polling 10x to stay inside Upstash's 500K commands/month
     # free tier. Trade-off: a freshly-enqueued job may sit in the queue up to
     # `poll_delay` seconds before the worker picks it up. Acceptable for AI

@@ -124,3 +124,34 @@ the module to its watch list when you add a fetcher.
 exception and write to the DB instead of returning anything — feed poll, link
 create, subscribe seeding — where row state is the only observable proof the guard
 fired.
+
+## AI failure modes
+
+Three files, one invariant between them: a request that **cannot** succeed must
+not be retried, and the user must be told.
+
+- `tests/test_provider_errors.py` (unit) — `agent/errors.raise_mapped` maps by
+  **status code**, never by message substring. The stand-in exception classes are
+  deliberate: the three OpenAI-codegen SDKs need a live `httpx.Request` to build
+  an `APIStatusError`, and the attribute shape (`status_code` / `.code` /
+  `.response.status_code`) is the whole contract. The same file pins
+  `human_message` against the real error strings each provider emits — Groq's
+  python-dict repr, OpenAI's JSON, Gemini's bare `400 …` text, Ollama's
+  `{"error": "…"}` — plus the two invariants that matter more than any single
+  shape: unparseable text is returned verbatim, and an empty message still says
+  something.
+- `tests/integration/test_ai_failure_modes.py` — a permanent error ends the link
+  on attempt 1 with no job re-enqueued, `sweep_failed_links` leaves
+  `ai_error_kind="config"` alone while still requeueing transient failures, and a
+  broken config notifies once per user per day. That sweep case is the regression
+  guard for the original bug: the ladder outran the hourly sweep, so the link read
+  `pending` — "Classifying…" — forever.
+- `tests/integration/test_ai_models_endpoint.py` — `POST /settings/ai/models`.
+  The provider is patched (`no_network` would fail a real call), but the Redis
+  cache and rate-limit counters are the live ones. Cache tests set
+  `AI_MODELS_CACHE_TTL = 0` to force every request past the cache — that value
+  must disable the cache, not reach Redis, which rejects `SET … EX 0`. The
+  `patch_models` fake records `(provider, api_key, model)`, because *which*
+  credential answered is the contract: a key typed into the body must be used
+  instead of the stored one and must not be persisted, and a refused key must be
+  a 400, not a 502.

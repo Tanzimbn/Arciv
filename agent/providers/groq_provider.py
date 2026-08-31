@@ -1,10 +1,8 @@
 from groq import AsyncGroq
 
 from agent.base import AIProvider, AIResult
+from agent.errors import raise_mapped
 from agent.prompt import (
-    AuthError,
-    ParseError,
-    QuotaError,
     SYSTEM_PROMPT,
     build_user_message,
     parse_ai_response,
@@ -12,9 +10,11 @@ from agent.prompt import (
 
 
 class GroqProvider(AIProvider):
-    def __init__(self, api_key: str, model: str = "llama-3.1-8b-instant"):
+    DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+    def __init__(self, api_key: str, model: str | None = None):
         self._client = AsyncGroq(api_key=api_key)
-        self._model = model
+        self._model = model or self.DEFAULT_MODEL
 
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
         try:
@@ -29,14 +29,7 @@ class GroqProvider(AIProvider):
             )
             return parse_ai_response(response.choices[0].message.content)
         except Exception as e:
-            msg = str(e)
-            if "401" in msg or "invalid_api_key" in msg.lower():
-                raise AuthError(msg) from e
-            if "429" in msg or "rate_limit" in msg.lower():
-                raise QuotaError(msg) from e
-            if isinstance(e, ParseError):
-                raise
-            raise
+            raise_mapped(e)
 
     async def generate(self, system: str, user_message: str) -> str:
         try:
@@ -50,9 +43,20 @@ class GroqProvider(AIProvider):
             )
             return response.choices[0].message.content
         except Exception as e:
-            msg = str(e)
-            if "401" in msg or "invalid_api_key" in msg.lower():
-                raise AuthError(msg) from e
-            if "429" in msg or "rate_limit" in msg.lower():
-                raise QuotaError(msg) from e
-            raise
+            raise_mapped(e)
+
+    # Groq's catalogue mixes speech models in with the chat ones and the SDK's
+    # model object carries no modality field, so exclude them by family. Only
+    # families that cannot serve chat.completions at all are listed.
+    _NOT_CHAT = ("whisper", "tts")
+
+    async def list_models(self) -> list[str]:
+        try:
+            response = await self._client.models.list()
+        except Exception as e:
+            raise_mapped(e)
+        return sorted(
+            m.id
+            for m in response.data
+            if getattr(m, "id", None) and not any(x in m.id.lower() for x in self._NOT_CHAT)
+        )

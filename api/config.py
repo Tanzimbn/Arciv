@@ -112,6 +112,28 @@ class Settings(BaseSettings):
     # POST /api/feeds/discover — fetches the page plus up to 5 COMMON_PATHS probes,
     # so one call is several outbound requests. Lowest limit of the set.
     FEEDS_DISCOVER_PER_MINUTE: int = 10
+    # GET /api/settings/ai/models — one call to the user's AI provider. Low
+    # because the UI needs it once per Settings visit and the answer is cached.
+    AI_MODELS_PER_MINUTE: int = 6
+    # How long a provider's model list stays cached, per (provider, key hash).
+    # Model catalogues change on the order of weeks; an hour keeps Settings snappy
+    # without pinning a stale list past a user rotating their key. 0 = no cache.
+    AI_MODELS_CACHE_TTL: int = 3600
+
+    # --- Ollama Cloud ---
+    # Chat/list timeouts, seconds. Ollama is the one provider we call over plain
+    # HTTP rather than through an SDK, so the timeout is ours to set. Keep both
+    # well under WorkerSettings.job_timeout (120): an arq timeout kill cancels
+    # the coroutine and runs none of the error handling, which strands the link
+    # at ai_status="processing".
+    OLLAMA_TIMEOUT: int = 60
+    OLLAMA_LIST_TIMEOUT: int = 15
+    # Links requeued per sweep_failed_links run, and per user within one run
+    # (0 = unlimited). The sweep resets ai_attempt_count, so an unbounded sweep
+    # lets one broken provider dump thousands of jobs onto the same queue that
+    # carries signup email.
+    SWEEP_BATCH_LIMIT: int = 200
+    SWEEP_PER_USER_LIMIT: int = 20
     # Auth-route rate limits (per client IP). slowapi rate strings, e.g. "5/minute",
     # "20/hour". Guard against credential stuffing / signup + email-send abuse.
     AUTH_REGISTER_RATE_LIMIT: str = "20/hour"

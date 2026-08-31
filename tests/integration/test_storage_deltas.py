@@ -163,3 +163,71 @@ async def test_worker_embedding_delta_is_accounted(
     # Re-embedding must not double-count.
     await embed_job.embed_link({}, link_id)
     assert await _assert_consistent(session_factory, user_id) == after
+
+
+async def test_terminal_ai_failure_accounts_for_the_error_text(
+    client, app_state, make_user, session_factory, monkeypatch
+):
+    """`ai_error` is in `storage._TEXT_FIELDS`, so the branch that writes it has
+    to apply its own delta. A provider message can be long, and a per-account
+    byte cap that silently undercounts is a cap that doesn't hold."""
+    from agent.errors import ModelError
+    from worker import ai_classify
+    from api.utils.encryption import encrypt_secret
+
+    user_id, alice = await make_user(
+        ai_provider="groq", ai_model="gone-1b", ai_api_key_enc=encrypt_secret("k")
+    )
+    r = await client.post("/api/links", json={"url": "https://example.com/ai-fail"}, headers=alice)
+    link_id = r.json()["id"]
+    before = await _assert_consistent(session_factory, user_id)
+
+    message = "The model `gone-1b` has been decommissioned. " * 4
+
+    class Fake:
+        async def classify_and_summarise(self, title, content, url):
+            raise ModelError(message)
+
+    monkeypatch.setattr(ai_classify, "make_provider", lambda *a, **k: Fake())
+    await ai_classify.classify_link({"redis": app_state}, link_id)
+
+    after = await _assert_consistent(session_factory, user_id)
+    assert after > before, "the error text was stored but never accounted"
+
+
+async def test_transient_ai_failure_error_text_is_accounted_and_refunded(
+    client, app_state, make_user, session_factory, monkeypatch
+):
+    """The retry branch writes `ai_error` too, and a later success clears it —
+    both directions have to move the total, or every retried link leaks bytes."""
+    from agent.base import AIResult
+    from worker import ai_classify
+    from api.utils.encryption import encrypt_secret
+
+    user_id, alice = await make_user(ai_provider="groq", ai_api_key_enc=encrypt_secret("k"))
+    r = await client.post("/api/links", json={"url": "https://example.com/ai-flaky"}, headers=alice)
+    link_id = r.json()["id"]
+    before = await _assert_consistent(session_factory, user_id)
+
+    class Flaky:
+        def __init__(self):
+            self.calls = 0
+
+        async def classify_and_summarise(self, title, content, url):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("upstream 503 " * 20)
+            return AIResult(
+                content_type="article", queue="read-later", summary="ok",
+                tags=["x"], raw_response={},
+            )
+
+    flaky = Flaky()
+    monkeypatch.setattr(ai_classify, "make_provider", lambda *a, **k: flaky)
+
+    await ai_classify.classify_link({"redis": app_state}, link_id)
+    failed_total = await _assert_consistent(session_factory, user_id)
+    assert failed_total > before
+
+    await ai_classify.classify_link({"redis": app_state}, link_id)
+    await _assert_consistent(session_factory, user_id)

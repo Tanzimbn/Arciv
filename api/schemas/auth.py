@@ -70,6 +70,7 @@ class UserResponse(BaseModel):
     email_verified: bool
     is_admin: bool
     ai_provider: str
+    ai_model: str | None = None
     feed_notify_telegram: bool
     feed_notify_inapp: bool
     created_at: datetime

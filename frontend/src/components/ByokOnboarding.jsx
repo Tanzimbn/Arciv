@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { api, errMessage } from "../api/client.js";
-import { ProviderPicker } from "./ProviderPicker.jsx";
+import { errMessage } from "../api/client.js";
+import { connectAi, connectErrorTitle } from "./AiConnection.jsx";
+import { ProviderPicker, providerOf } from "./ProviderPicker.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 /* First-run BYOK prompt. Shown when a user has no personal AI key and the
  * instance has no shared key (hosted default) — without one, saved links never
- * get classified. Reuses the Settings BYOK plumbing (updateSettings + testAI).
+ * get classified. Shares one act with Settings: `connectAi` checks the key with
+ * the provider and only then stores it, so a rejected key never lands in the
+ * database and the modal can name the field to fix.
  * Skippable: heuristics still route links, so this never blocks the app.
  *
  * onDone(added: boolean) — added=true when a key was saved & verified. */
@@ -14,36 +17,26 @@ export default function ByokOnboarding({ onDone, initialProvider = "gemini" }) {
   const [provider, setProvider] = useState(initialProvider);
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+  const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const meta = providerOf(provider);
 
   async function handleSave() {
-    if (!apiKey.trim()) {
+    const key = apiKey.trim();
+    if (!key) {
       setError("Paste your API key to continue, or skip for now.");
       return;
     }
     setSaving(true);
     setError("");
-    setTestResult(null);
+    setResult(null);
     try {
-      await api.updateSettings({ ai_provider: provider, ai_api_key: apiKey.trim() });
-      // Verify the key actually works before declaring success — a bad key
-      // saved silently would leave links stuck exactly as before.
-      let result;
-      try {
-        result = await api.testAI();
-      } catch {
-        result = { success: false, message: "Saved, but the test request failed." };
-      }
-      setTestResult(result);
-      if (result.success) {
-        // Brief beat so the success chip is visible, then close.
-        setTimeout(() => onDone(true), 700);
-      } else {
-        setSaving(false);
-      }
+      await connectAi(provider, key);
+      setResult({ success: true, message: `${meta.label} connected.` });
+      // Brief beat so the success chip is visible, then close.
+      setTimeout(() => onDone(true), 700);
     } catch (err) {
-      setError(errMessage(err, "Couldn't save your key. Try again."));
+      setError(`${connectErrorTitle(err, provider)} — ${errMessage(err, "Try again.")}`);
       setSaving(false);
     }
   }
@@ -88,7 +81,8 @@ export default function ByokOnboarding({ onDone, initialProvider = "gemini" }) {
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
           Provider
         </div>
-        <ProviderPicker value={provider} isMobile={isMobile} onChange={p => { setProvider(p); setTestResult(null); }} />
+        <ProviderPicker value={provider} isMobile={isMobile}
+          onChange={p => { setProvider(p); setResult(null); }} />
 
         {/* Key */}
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase", margin: "18px 0 8px" }}>
@@ -97,8 +91,8 @@ export default function ByokOnboarding({ onDone, initialProvider = "gemini" }) {
         <input
           type="password"
           value={apiKey}
-          onChange={e => { setApiKey(e.target.value); setError(""); setTestResult(null); }}
-          placeholder="Paste your API key here"
+          onChange={e => { setApiKey(e.target.value); setError(""); setResult(null); }}
+          placeholder={`Paste your ${meta.label} key${meta.prefix ? ` · ${meta.prefix}` : ""}`}
           autoFocus
           onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
           style={{
@@ -108,39 +102,49 @@ export default function ByokOnboarding({ onDone, initialProvider = "gemini" }) {
           }}
         />
 
+
+        {meta.keyUrl && (
+          <a href={meta.keyUrl} target="_blank" rel="noreferrer"
+            style={{ display: "inline-block", marginTop: 8, fontSize: 11.5, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
+            Get a {meta.label} API key ↗
+          </a>
+        )}
         {error && <p style={{ fontSize: 12.5, color: "var(--bad)", fontWeight: 600, margin: "10px 0 0" }}>{error}</p>}
-        {testResult && (
+        {result && (
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12,
             padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-            background: testResult.success ? "var(--good-tint)" : "var(--bad-tint)",
-            color: testResult.success ? "var(--good)" : "var(--bad)",
-            border: `1px solid color-mix(in oklab, ${testResult.success ? "var(--good)" : "var(--bad)"} 25%, transparent)`,
+            background: result.success ? "var(--good-tint)" : "var(--bad-tint)",
+            color: result.success ? "var(--good)" : "var(--bad)",
+            border: `1px solid color-mix(in oklab, ${result.success ? "var(--good)" : "var(--bad)"} 25%, transparent)`,
           }}>
-            {testResult.success ? "✓" : "✕"} {testResult.message}
+            {result.success ? "✓" : "✕"} {result.message}
           </div>
         )}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end", alignItems: "center" }}>
-          <button type="button" onClick={() => onDone(false)} disabled={saving}
+          <button type="button" onClick={() => onDone(false)} disabled={saving} className="arciv-hov"
             style={{
               padding: "9px 16px", border: "1.5px solid var(--line)", borderRadius: 10,
               fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer",
               background: "var(--surface-2)", color: "var(--ink-2)",
+              "--hov-bg": "var(--surface)", "--hov-line": "var(--muted-2)", "--hov-color": "var(--ink)",
             }}>
             Skip for now
           </button>
-          <button type="button" onClick={handleSave} disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving} className="arciv-hov"
             style={{
               padding: "9px 18px", border: 0, borderRadius: 10,
               fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer",
               background: saving ? "var(--accent-tint-2)" : "var(--accent)",
               color: saving ? "var(--accent)" : "var(--accent-ink)",
               boxShadow: saving ? "none" : "0 2px 10px rgba(109,58,255,.25)",
-              transition: "background .15s",
+              "--hov-bg": saving ? "var(--accent-tint-2)" : "var(--accent-deep)",
+              "--hov-line": "transparent",
+              "--hov-color": saving ? "var(--accent)" : "var(--accent-ink)",
             }}>
-            {saving ? "Saving…" : "Save & continue"}
+            {saving ? "Checking…" : "Connect"}
           </button>
         </div>
       </div>

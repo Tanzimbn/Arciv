@@ -637,3 +637,24 @@ body.dark ::-webkit-scrollbar-thumb {
   background-clip: content-box;
   border: 2px solid var(--bg);
 }
+
+/* ── Hover for inline-styled controls ──────────────────────────────────────
+   Most buttons here build their look from inline styles, and inline styles
+   cannot express :hover — which is why a lot of them had no hover state at all.
+   This class supplies one: set --hov-bg / --hov-line / --hov-color inline
+   alongside the base values and the browser does the rest, including skipping
+   it while the control is disabled. Set all three (repeat a base value where
+   nothing should change) so there is nothing to fall back to. */
+.arciv-hov { transition: background .13s ease, border-color .13s ease, color .13s ease, box-shadow .13s ease, transform .07s ease; }
+/* !important is load-bearing, not laziness: the base look of these controls
+   lives in the inline style attribute, which outranks any class selector. A
+   plain declaration here loses every time — which is why the hover appeared to
+   do nothing at all. */
+.arciv-hov:hover:not(:disabled) {
+  background: var(--hov-bg) !important;
+  border-color: var(--hov-line) !important;
+  color: var(--hov-color) !important;
+}
+.arciv-hov:active:not(:disabled) { transform: translateY(1px); }
+/* Inline `transition` on a few of these would otherwise win too. */
+.arciv-hov { transition-property: background, border-color, color, box-shadow, transform !important; }

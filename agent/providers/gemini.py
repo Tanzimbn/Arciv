@@ -1,13 +1,19 @@
+import asyncio
+
 import google.generativeai as genai
 
 from agent.base import AIProvider, AIResult
-from agent.prompt import AuthError, ParseError, QuotaError, build_combined_prompt, parse_ai_response
+from agent.errors import raise_mapped
+from agent.prompt import build_combined_prompt, parse_ai_response
 
 
 class GeminiProvider(AIProvider):
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
+    DEFAULT_MODEL = "gemini-2.0-flash"
+
+    def __init__(self, api_key: str, model: str | None = None):
         genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(model)
+        self._model_name = model or self.DEFAULT_MODEL
+        self._model = genai.GenerativeModel(self._model_name)
 
     async def classify_and_summarise(self, title: str, content: str, url: str) -> AIResult | None:
         prompt = build_combined_prompt(title, content, url)
@@ -15,23 +21,25 @@ class GeminiProvider(AIProvider):
             response = await self._model.generate_content_async(prompt)
             return parse_ai_response(response.text)
         except Exception as e:
-            msg = str(e)
-            if "API_KEY_INVALID" in msg or "401" in msg or "403" in msg:
-                raise AuthError(msg) from e
-            if "429" in msg or "quota" in msg.lower():
-                raise QuotaError(msg) from e
-            if isinstance(e, ParseError):
-                raise
-            raise
+            raise_mapped(e)
 
     async def generate(self, system: str, user_message: str) -> str:
         try:
             response = await self._model.generate_content_async(f"{system}\n\n{user_message}")
             return response.text
         except Exception as e:
-            msg = str(e)
-            if "API_KEY_INVALID" in msg or "401" in msg or "403" in msg:
-                raise AuthError(msg) from e
-            if "429" in msg or "quota" in msg.lower():
-                raise QuotaError(msg) from e
-            raise
+            raise_mapped(e)
+
+    async def list_models(self) -> list[str]:
+        # `genai.list_models` is sync and does network I/O, so it cannot run on
+        # the event loop. It also returns embedding and legacy models, hence the
+        # `generateContent` check.
+        try:
+            models = await asyncio.to_thread(lambda: list(genai.list_models()))
+        except Exception as e:
+            raise_mapped(e)
+        return sorted(
+            m.name.removeprefix("models/")
+            for m in models
+            if "generateContent" in getattr(m, "supported_generation_methods", ())
+        )
