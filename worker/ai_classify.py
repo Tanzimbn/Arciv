@@ -1,7 +1,8 @@
+import random
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 
 from agent.errors import AuthError, ModelError, ParseError, QuotaError, human_message
 from agent.registry import make_provider
@@ -22,12 +23,18 @@ _RETRY_DELAYS = [
 MAX_ATTEMPTS = 4
 SHARED_DAILY_LIMIT = 20
 
+# arq's per-job ceiling, defined here rather than in worker/worker.py because the
+# "processing" watchdog stamp below has to reason about it.
+# WorkerSettings.job_timeout reads it from here.
+JOB_TIMEOUT_SECONDS = 120
+
 
 async def _get_provider(user: User, redis):
     """Return (provider, provider_name) or (None, None) if no provider available."""
     if user.ai_api_key_enc:
         api_key = decrypt_secret(user.ai_api_key_enc)
-        return make_provider(user.ai_provider, api_key, user.ai_model), user.ai_provider
+        provider = make_provider(user.ai_provider, api_key, user.ai_model)
+        return provider, user.ai_provider
 
     if settings.SHARED_GEMINI_KEY:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -83,6 +90,7 @@ async def _notify_ai_config_broken(db, redis, user: User, kind: str, message: st
 
 
 async def classify_link(ctx, link_id: str) -> None:
+    """Classify one link."""
     redis = ctx["redis"]
 
     async with AsyncSessionLocal() as db:
@@ -97,6 +105,14 @@ async def classify_link(ctx, link_id: str) -> None:
         attempt = link.ai_attempt_count + 1
         link.ai_attempt_count = attempt
         link.ai_status = "processing"
+        # Watchdog stamp. An arq job_timeout kill cancels this coroutine, so none
+        # of the except branches below run and the row would sit at "processing"
+        # forever — matched by neither sweep_failed_links nor idx_links_ai_retry.
+        # This column already means "earliest time it's worth touching this row
+        # again", so the sweep can use it to spot a job that should have finished.
+        link.ai_next_retry_at = datetime.now(timezone.utc) + timedelta(
+            seconds=JOB_TIMEOUT_SECONDS + 60
+        )
         await db.commit()
 
         try:
@@ -128,6 +144,7 @@ async def classify_link(ctx, link_id: str) -> None:
             link.ai_status = "done"
             link.ai_provider_used = provider_name
             link.ai_error = None
+            link.ai_next_retry_at = None  # clear the watchdog stamp
             link.processed_at = datetime.now(timezone.utc)
             await db.commit()
             await adjust_user_storage(db, link.user_id, link_bytes(link) - before)
@@ -187,23 +204,71 @@ async def sweep_failed_links(ctx) -> None:
     Links marked ``ai_error_kind="config"`` are left alone: a retired model or a
     revoked key cannot be fixed by trying again, and requeueing them puts the link
     back into ``pending``, which the UI renders as "Classifying…".
+
+    Also rescues links stranded at ``processing``: an arq ``job_timeout`` kill
+    cancels the job mid-flight, so nothing marks the row, and ``ai_status`` is
+    matched by neither the failed-link filter nor ``idx_links_ai_retry``. The
+    watchdog stamp ``classify_link`` writes when it enters ``processing`` is how
+    we tell "still running" from "died".
+
+    Bounded on purpose. This resets ``ai_attempt_count``, so an unbounded sweep
+    lets one broken provider dump every one of a user's failed links onto the
+    same queue that carries signup email, every hour. The batch cap limits the
+    burst, the per-user cap keeps one account from consuming it, and the jitter
+    spreads it over five minutes instead of firing it all at :00.
     """
     redis = ctx["redis"]
+    now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Link).where(
+        eligible = or_(
+            and_(
                 Link.ai_status == "failed",
                 # IS DISTINCT FROM, not !=: a plain inequality is NULL for every
                 # row written before ai_error_kind existed, which would silently
                 # stop retrying *all* transient failures.
                 Link.ai_error_kind.is_distinct_from("config"),
-            )
+            ),
+            and_(
+                Link.ai_status == "processing",
+                Link.ai_next_retry_at.isnot(None),
+                Link.ai_next_retry_at < now,
+            ),
         )
+        # Rank per user in SQL rather than trimming in Python: with the cap applied
+        # after a plain LIMIT, one user holding the oldest 200 rows would fill the
+        # batch and everyone else would be starved for as long as their backlog
+        # lasted.
+        ranked = (
+            select(
+                Link.id.label("id"),
+                func.row_number()
+                .over(
+                    partition_by=Link.user_id,
+                    order_by=[Link.ai_next_retry_at.asc().nullsfirst(), Link.saved_at.asc()],
+                )
+                .label("rn"),
+            )
+            .where(eligible)
+            .subquery()
+        )
+        query = select(Link).join(ranked, Link.id == ranked.c.id)
+        if settings.SWEEP_PER_USER_LIMIT > 0:
+            query = query.where(ranked.c.rn <= settings.SWEEP_PER_USER_LIMIT)
+        query = query.order_by(Link.ai_next_retry_at.asc().nullsfirst())
+        if settings.SWEEP_BATCH_LIMIT > 0:
+            query = query.limit(settings.SWEEP_BATCH_LIMIT)
+
+        result = await db.execute(query)
         links = result.scalars().all()
         for link in links:
             link.ai_attempt_count = 0
             link.ai_status = "pending"
+            link.ai_next_retry_at = None
         await db.commit()
 
     for link in links:
-        await redis.enqueue_job("classify_link", str(link.id))
+        await redis.enqueue_job(
+            "classify_link",
+            str(link.id),
+            _defer_by=timedelta(seconds=random.randint(0, 300)),
+        )

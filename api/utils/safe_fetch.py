@@ -158,6 +158,21 @@ def _pin(url: httpx.URL, address: str) -> tuple[httpx.URL, dict[str, str]]:
     return url.copy_with(host=address), {"Host": host_header}
 
 
+# Headers that must not survive a hop to a different origin. httpx strips these
+# itself when it follows redirects, but we do our own following (to validate and
+# pin each hop), so we have to reimplement it: an Ollama server answering 302 to
+# a third party would otherwise hand that third party the user's access token.
+_CREDENTIAL_HEADERS = ("authorization", "cookie", "proxy-authorization")
+
+
+def _origin(url: httpx.URL) -> tuple[bytes, bytes, int | None]:
+    return url.raw_scheme, url.raw_host, url.port
+
+
+def _drop_credentials(headers: dict[str, str]) -> dict[str, str]:
+    return {k: v for k, v in headers.items() if k.lower() not in _CREDENTIAL_HEADERS}
+
+
 async def _fetch_chain(
     client: httpx.AsyncClient,
     method: str,
@@ -174,6 +189,7 @@ async def _fetch_chain(
     ``safe_request``.
     """
     current = parse_url(url)
+    headers = dict(headers or {})
 
     for _ in range(max_redirects + 1):
         address = await resolve_and_validate(current)
@@ -182,7 +198,7 @@ async def _fetch_chain(
         request = client.build_request(
             method,
             pinned,
-            headers={**(headers or {}), **host_headers},
+            headers={**headers, **host_headers},
             json=json_body,
             extensions={"sni_hostname": current.host},
         )
@@ -202,7 +218,10 @@ async def _fetch_chain(
             json_body = None
         # Join against the *logical* URL, so a relative Location can't be
         # re-anchored onto the pinned address.
-        current = current.join(location)
+        nxt = current.join(location)
+        if _origin(nxt) != _origin(current):
+            headers = _drop_credentials(headers)
+        current = nxt
 
     raise httpx.TooManyRedirects(
         f"Exceeded {max_redirects} redirects fetching {url}",

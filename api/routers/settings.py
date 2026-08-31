@@ -34,8 +34,7 @@ def _build_response(user: User) -> SettingsResponse:
     masked = None
     if user.ai_api_key_enc:
         try:
-            raw = decrypt_secret(user.ai_api_key_enc)
-            masked = mask_api_key(raw)
+            masked = mask_api_key(decrypt_secret(user.ai_api_key_enc))
         except Exception:
             masked = "****"
     return SettingsResponse(
@@ -98,7 +97,10 @@ async def update_settings(
             raise HTTPException(status_code=409, detail="Username already taken.")
     if body.ai_provider is not None:
         if body.ai_provider not in VALID_PROVIDERS:
-            raise HTTPException(status_code=400, detail=f"Invalid provider. Must be one of: {sorted(VALID_PROVIDERS)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid provider. Must be one of: {sorted(VALID_PROVIDERS)}",
+            )
         # Switching provider invalidates the model, unless the same PATCH supplies
         # a new one. Keeping it would carry e.g. a Groq model id over to OpenAI and
         # 404 every classify — the same outage, self-inflicted.
@@ -160,8 +162,8 @@ def _resolve_ai_credentials(user: User) -> tuple[str, str, str | None]:
     """(provider_name, api_key, model) for an outbound provider call.
 
     Same resolution as ``/ai/test``: the user's own key, else the instance's
-    shared Gemini key. The shared key is Gemini's, so a user's model choice for
-    some other provider must not ride along with it.
+    shared Gemini key. The shared key is Gemini's, so a user's model choice may
+    not ride along with it.
     """
     if user.ai_api_key_enc:
         try:
@@ -223,8 +225,8 @@ async def list_ai_models(
 
     default = default_model_for(provider_name)
 
-    # Key on a hash of the credential, not the user: two accounts with the same
-    # key share the same answer, and a rotated key must not read a stale list.
+    # Key on a hash of the key, not the user: two accounts with the same key
+    # share the same answer, and a rotated key must not read a stale list.
     cache_key = f"ai_models:{provider_name}:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
     # TTL 0 disables the cache, matching every other limit in config.py. It has
     # to short-circuit both sides: Redis rejects `SET ... EX 0` outright, so

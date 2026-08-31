@@ -30,6 +30,19 @@ def test_envelope_round_trip():
     assert decrypt_secret(blob) == PLAINTEXT
 
 
+def test_awkward_characters_round_trip_and_rewrap():
+    """Provider keys are opaque strings, not the `sk-` shape the other cases use.
+
+    Base64-ish payloads (`+`, `/`, `=`) and colons all appear in real keys, and
+    rotation has to move them too — dropping a retired KEK must not lock a user
+    out of a key that happened to contain one."""
+    key = "abc:not-a-real-key/+="
+    blob = encrypt_secret(key)
+    assert key not in blob
+    assert decrypt_secret(blob) == key
+    assert decrypt_secret(rewrap_secret(blob)) == key
+
+
 def test_envelope_blob_carries_active_kek_id(monkeypatch):
     from api.config import settings
 

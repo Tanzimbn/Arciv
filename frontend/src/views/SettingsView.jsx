@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, clearTokens } from "../api/client.js";
 import SubpageNav from "../components/SubpageNav.jsx";
-import { ModelPicker, PROVIDERS, ProviderPicker } from "../components/ProviderPicker.jsx";
+import AiConnection from "../components/AiConnection.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 /* ── Icons ────────────────────────────────────────────────── */
 const I = {
   user:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
-  key:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>,
   bell:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
   bot:    () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 11V7"/><circle cx="12" cy="5" r="2"/><path d="M8 15h.01M16 15h.01"/></svg>,
   check:  () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 6"/></svg>,
@@ -49,7 +48,7 @@ function UsageMeter({ label, used, limit, format }) {
 }
 
 /* ── Section card ─────────────────────────────────────────── */
-function Section({ icon, title, children }) {
+function Section({ icon, title, aside, children }) {
   return (
     <section style={{
       background: "var(--surface)", border: "1px solid var(--line)",
@@ -62,6 +61,11 @@ function Section({ icon, title, children }) {
       }}>
         <span style={{ color: "var(--accent)", display: "flex", opacity: 0.85 }}>{icon}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", letterSpacing: "-0.01em" }}>{title}</span>
+        {/* A standing fact about the section, not an action — the one-key-per-account
+            rule belongs here rather than as a paragraph inside the form. */}
+        {aside && (
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>{aside}</span>
+        )}
       </div>
       <div style={{ padding: "18px 20px" }}>{children}</div>
     </section>
@@ -134,13 +138,6 @@ export default function SettingsView({ onBack }) {
   const { isMobile } = useBreakpoint();
   const [settings, setSettings] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [provider, setProvider] = useState("gemini");
-  // "" = the provider default, matching ai_model NULL on the server.
-  const [model, setModel] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  // The key the user has *submitted* for checking, which is not the same thing
-  // as the key they are typing: nothing is sent to a provider until they ask.
-  const [checkedKey, setCheckedKey] = useState("");
   const [notifyTelegram, setNotifyTelegram] = useState(false);
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [usernameInput, setUsernameInput] = useState("");
@@ -150,8 +147,6 @@ export default function SettingsView({ onBack }) {
   const [usernameSuccess, setUsernameSuccess] = useState("");
   const [usernameFocused, setUsernameFocused] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [telegramToken, setTelegramToken] = useState("");
@@ -167,8 +162,6 @@ export default function SettingsView({ onBack }) {
   useEffect(() => {
     api.getSettings().then(s => {
       setSettings(s);
-      setProvider(s.ai_provider || "gemini");
-      setModel(s.ai_model || "");
       setNotifyTelegram(s.feed_notify_telegram);
       setNotifyInApp(s.feed_notify_inapp);
       setUsernameInput(s.username ?? "");
@@ -181,38 +174,12 @@ export default function SettingsView({ onBack }) {
     e.preventDefault();
     setSaving(true); setError(""); setSuccess("");
     try {
-      // ai_model always goes with ai_provider: the server clears a stale model on a
-      // provider switch only when the same PATCH omits one, so sending both keeps
-      // an explicit choice and an explicit "" (provider default) both meaningful.
-      const patch = {
-        ai_provider: provider, ai_model: model,
+      setSettings(await api.updateSettings({
         feed_notify_telegram: notifyTelegram, feed_notify_inapp: notifyInApp,
-      };
-      if (apiKey) patch.ai_api_key = apiKey;
-      const updated = await api.updateSettings(patch);
-      setSettings(updated); setModel(updated.ai_model || "");
-      // The draft is now the stored key; drop both so the picker re-lists against
-      // what was actually saved rather than a copy of it.
-      setApiKey(""); setCheckedKey(""); setSuccess("Settings saved.");
+      }));
+      setSuccess("Preferences saved.");
     } catch { setError("Failed to save settings."); }
     finally { setSaving(false); }
-  }
-
-  async function handleTest() {
-    setTesting(true); setTestResult(null);
-    try { setTestResult(await api.testAI()); }
-    catch { setTestResult({ success: false, message: "Request failed." }); }
-    finally { setTesting(false); }
-  }
-
-  async function handleClearKey() {
-    // There is one key per account (`users.ai_api_key_enc`), not one per
-    // provider, so this removes the account's key outright — see the note in the
-    // API Key field.
-    try {
-      setSettings(await api.updateSettings({ ai_api_key: "" }));
-      setApiKey(""); setCheckedKey("");
-    } catch { setError("Failed to clear key."); }
   }
 
   async function handleSaveUsername() {
@@ -271,15 +238,6 @@ export default function SettingsView({ onBack }) {
     }
   }
 
-  const keyDraft = apiKey.trim();
-  const keyReadyToCheck = !!keyDraft && keyDraft !== checkedKey;
-  const keyAlreadyChecked = !!keyDraft && keyDraft === checkedKey;
-  // The stored key is the *saved* provider's, so a badge under a freshly picked
-  // provider would be claiming a credential that isn't there.
-  const keyMatchesSelectedProvider = !!settings?.ai_api_key_masked && provider === settings.ai_provider;
-  const labelOf = id => PROVIDERS.find(x => x.id === id)?.label || id;
-  const selectedProviderLabel = labelOf(provider);
-  const savedProviderLabel = labelOf(settings?.ai_provider);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
@@ -293,7 +251,7 @@ export default function SettingsView({ onBack }) {
             Settings
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--muted)", margin: "6px 0 0" }}>
-            Configure your AI provider, notifications, and integrations.
+            Connect an AI provider, and set notifications and integrations.
           </p>
         </div>
 
@@ -324,6 +282,7 @@ export default function SettingsView({ onBack }) {
                   </div>
                   <button
                     type="button"
+                    className="arciv-hov"
                     onClick={handleSaveUsername}
                     disabled={usernameSaving || usernameInput.trim() === savedUsername}
                     style={{
@@ -331,7 +290,10 @@ export default function SettingsView({ onBack }) {
                       cursor: (usernameSaving || usernameInput.trim() === savedUsername) ? "default" : "pointer",
                       background: (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--surface-2)" : "var(--btn-dark)",
                       color: (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--muted)" : "var(--btn-dark-text)",
-                      transition: "background .15s, color .15s", whiteSpace: "nowrap", flexShrink: 0,
+                      whiteSpace: "nowrap", flexShrink: 0,
+                      "--hov-bg": (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--surface-2)" : "var(--btn-dark-hover)",
+                      "--hov-line": "transparent",
+                      "--hov-color": (usernameSaving || usernameInput.trim() === savedUsername) ? "var(--muted)" : "var(--btn-dark-text)",
                     }}
                   >
                     {usernameSaving ? "Saving…" : "Save"}
@@ -362,159 +324,10 @@ export default function SettingsView({ onBack }) {
                 </Section>
               )}
 
-            {/* AI Classification */}
-            <Section icon={<I.zap />} title="AI Classification">
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div>
-                  <FieldLabel>Provider</FieldLabel>
-                  {/* A check is per provider: a key verified against Groq says
-                      nothing about OpenAI, so switching drops it (the typed key
-                      is kept — it may well be the key for the new provider). */}
-                  <ProviderPicker value={provider} isMobile={isMobile}
-                    onChange={p => { setProvider(p); setModel(""); setCheckedKey(""); setTestResult(null); }} />
-                </div>
-
-                <div>
-                  <FieldLabel>Model</FieldLabel>
-                  {/* checkedKey is the unsaved key the user submitted with "Check
-                      key" below: the picker lists models for *that* key, so a bad
-                      key is caught before saving — but only when asked, never per
-                      keystroke. */}
-                  <ModelPicker
-                    provider={provider}
-                    savedProvider={settings.ai_provider}
-                    savedKeyHint={settings.ai_api_key_masked || ""}
-                    apiKeyChecked={checkedKey}
-                    keyAwaitingCheck={!!apiKey.trim() && apiKey.trim() !== checkedKey}
-                    sharedAvailable={!!settings.shared_ai_available}
-                    value={model}
-                    onChange={m => { setModel(m); setTestResult(null); }}
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>API Key</FieldLabel>
-                  {/* One key per account, not one per provider: `ai_api_key_enc`
-                      is a single column, used with whatever `ai_provider` is set
-                      to. So the stored key belongs to the *saved* provider, and
-                      claiming it under a different one would be a lie — hence the
-                      two states below. Clear removes that one key for good. */}
-                  {settings.ai_api_key_masked && (
-                    keyMatchesSelectedProvider ? (
-                      <div style={{
-                        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-                        padding: "10px 13px", marginBottom: 8,
-                        background: "var(--good-tint)", borderRadius: 10,
-                        border: "1.5px solid color-mix(in oklab, var(--good) 25%, transparent)",
-                      }}>
-                        <span style={{ color: "var(--good)", display: "inline-flex" }}><I.key /></span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--good)" }}>
-                          {selectedProviderLabel} key saved
-                        </span>
-                        <span style={{ fontSize: 12.5, color: "var(--ink-2)", fontFamily: "monospace", flex: 1, letterSpacing: "0.04em", minWidth: 110 }}>
-                          {settings.ai_api_key_masked}
-                        </span>
-                        <button type="button" onClick={handleClearKey} title="Remove this account's stored key"
-                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--bad)", background: "var(--bad-tint)", border: "1px solid color-mix(in oklab, var(--bad) 25%, transparent)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
-                          <I.trash /> Clear
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{
-                        display: "flex", flexDirection: "column", gap: 6,
-                        padding: "10px 13px", marginBottom: 8,
-                        background: "var(--surface-2)", borderRadius: 10, border: "1.5px solid var(--line-2)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                          <I.key />
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>
-                            {savedProviderLabel} key saved
-                          </span>
-                          <span style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "monospace", flex: 1, letterSpacing: "0.04em", minWidth: 110 }}>
-                            {settings.ai_api_key_masked}
-                          </span>
-                          <button type="button" onClick={handleClearKey} title="Remove this account's stored key"
-                            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--bad)", background: "var(--bad-tint)", border: "1px solid color-mix(in oklab, var(--bad) 25%, transparent)", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
-                            <I.trash /> Clear
-                          </button>
-                        </div>
-                        <span style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}>
-                          Nothing is stored for {selectedProviderLabel}. Paste a
-                          {" "}{selectedProviderLabel} key below and save — it replaces the
-                          {" "}{savedProviderLabel} one, since an account holds a single key.
-                        </span>
-                      </div>
-                    )
-                  )}
-                  <Field
-                    type="password" value={apiKey}
-                    onChange={e => setApiKey(e.target.value)}
-                    onKeyDown={e => {
-                      // Enter inside the form would submit — i.e. save a key that
-                      // has never been checked. Check it instead.
-                      if (e.key === "Enter") { e.preventDefault(); if (keyReadyToCheck) setCheckedKey(apiKey.trim()); }
-                    }}
-                    placeholder={settings.ai_api_key_masked ? "Enter new key to replace current" : "Paste your API key here"}
-                    focused={focused === "apikey"}
-                    onFocus={() => setFocused("apikey")} onBlur={() => setFocused(null)}
-                  />
-                  {/* Checking is deliberately a button. The listing is a real
-                      request against the provider with the typed key, so firing it
-                      per keystroke both billed a request per pause and reported
-                      every prefix of a good key as "rejected". */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-                    <button type="button" onClick={() => setCheckedKey(apiKey.trim())} disabled={!keyReadyToCheck}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "7px 13px", fontSize: 12.5, fontWeight: 600, borderRadius: 9,
-                        border: `1.5px solid ${keyReadyToCheck ? "var(--accent)" : "var(--line)"}`,
-                        background: keyReadyToCheck ? "var(--accent-tint)" : "var(--surface-2)",
-                        color: keyReadyToCheck ? "var(--accent)" : "var(--muted-2)",
-                        cursor: keyReadyToCheck ? "pointer" : "default",
-                      }}>
-                      <I.check /> Check key
-                    </button>
-                    <span style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45 }}>
-                      {keyReadyToCheck
-                        ? "Lists the models this key can reach. Nothing is billed, nothing is saved yet."
-                        : keyAlreadyChecked
-                          ? "Key checked. Save to start using it."
-                          : "Verifies a key before you save it."}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Test row */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 2 }}>
-                  <button type="button" onClick={handleTest} disabled={testing}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                      border: "1.5px solid var(--line)", borderRadius: 10,
-                      background: "var(--surface-2)", color: "var(--ink-2)",
-                      cursor: testing ? "default" : "pointer", transition: "background .12s, border-color .12s",
-                    }}
-                    onMouseEnter={e => { if (!testing) { e.currentTarget.style.background = "var(--accent-tint)"; e.currentTarget.style.borderColor = "var(--accent)"; }}}
-                    onMouseLeave={e => { if (!testing) { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.borderColor = "var(--line)"; }}}
-                  >
-                    {testing
-                      ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin .8s linear infinite" }}><circle cx="12" cy="12" r="9" strokeOpacity=".3"/><path d="M21 12a9 9 0 0 0-9-9" strokeLinecap="round"/></svg> Testing…</>
-                      : <><I.zap /> Test connection</>}
-                  </button>
-                  {testResult && (
-                    <div style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-                      background: testResult.success ? "var(--good-tint)" : "var(--bad-tint)",
-                      color: testResult.success ? "var(--good)" : "var(--bad)",
-                      border: `1px solid color-mix(in oklab, ${testResult.success ? "var(--good)" : "var(--bad)"} 25%, transparent)`,
-                    }}>
-                      <I.check />
-                      {testResult.message}
-                    </div>
-                  )}
-                </div>
-              </div>
+            {/* AI Classification — an account is either connected to a provider
+                or it isn't; AiConnection owns both states and saves itself. */}
+            <Section icon={<I.zap />} title="AI Classification" aside="One key per account">
+              <AiConnection settings={settings} onSettings={setSettings} />
             </Section>
 
             {/* Notifications */}
@@ -593,14 +406,17 @@ export default function SettingsView({ onBack }) {
                         }}>
                           {telegramToken}
                         </code>
-                        <button type="button" onClick={handleCopyToken}
+                        <button type="button" onClick={handleCopyToken} className="arciv-hov"
                           style={{
                             display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 3,
                             padding: "10px 14px", fontSize: 11.5, fontWeight: 600,
                             color: copied ? "var(--good)" : "var(--accent)",
                             background: copied ? "var(--good-tint)" : "var(--surface)",
                             border: `1.5px solid ${copied ? "color-mix(in oklab, var(--good) 25%, transparent)" : "color-mix(in oklab, var(--accent) 25%, transparent)"}`,
-                            borderRadius: 9, cursor: "pointer", flexShrink: 0, transition: "all .2s",
+                            borderRadius: 9, cursor: "pointer", flexShrink: 0,
+                            "--hov-bg": copied ? "color-mix(in oklab, var(--good) 12%, var(--surface))" : "var(--accent-tint)",
+                            "--hov-line": copied ? "color-mix(in oklab, var(--good) 45%, transparent)" : "var(--accent)",
+                            "--hov-color": copied ? "var(--good)" : "var(--accent-deep)",
                           }}>
                           {copied ? <I.check /> : <I.copy />}
                           {copied ? "Copied" : "Copy"}
@@ -639,7 +455,7 @@ export default function SettingsView({ onBack }) {
               onMouseEnter={e => { if (!saving) e.currentTarget.style.background = "var(--accent-deep)"; }}
               onMouseLeave={e => { if (!saving) e.currentTarget.style.background = "var(--accent)"; }}
             >
-              {saving ? "Saving…" : "Save settings"}
+              {saving ? "Saving…" : "Save preferences"}
             </button>
           </form>
 
@@ -664,11 +480,12 @@ export default function SettingsView({ onBack }) {
                   <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", margin: 0 }}>Export my data</p>
                   <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0", lineHeight: 1.4 }}>Download all your links, feeds, and notifications as a JSON file.</p>
                 </div>
-                <button type="button" onClick={handleExport} disabled={exporting}
+                <button type="button" onClick={handleExport} disabled={exporting} className="arciv-hov"
                   style={{
                     padding: "9px 16px", border: "1.5px solid var(--line)", borderRadius: 10,
                     fontSize: 13, fontWeight: 600, cursor: exporting ? "default" : "pointer",
                     background: "var(--surface-2)", color: "var(--ink-2)", whiteSpace: "nowrap", flexShrink: 0,
+                    "--hov-bg": "var(--surface)", "--hov-line": "var(--muted-2)", "--hov-color": "var(--ink)",
                   }}>
                   {exporting ? "Exporting…" : "Export data"}
                 </button>
@@ -683,10 +500,13 @@ export default function SettingsView({ onBack }) {
                   <p style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 0", lineHeight: 1.4 }}>Permanently remove your account and all associated data. This cannot be undone.</p>
                 </div>
                 <button type="button" onClick={() => { setDeleteOpen(true); setDeletePassword(""); setDeleteError(""); }}
+                  className="arciv-hov"
                   style={{
-                    padding: "9px 16px", border: 0, borderRadius: 10,
+                    padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                     fontSize: 13, fontWeight: 600, cursor: "pointer",
                     background: "var(--bad)", color: "#fff", whiteSpace: "nowrap", flexShrink: 0,
+                    "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
+                    "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
                   }}>
                   Delete account
                 </button>
@@ -734,18 +554,23 @@ export default function SettingsView({ onBack }) {
             {deleteError && <p style={{ fontSize: 12.5, color: "var(--bad)", fontWeight: 600, margin: "8px 0 0" }}>{deleteError}</p>}
             <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
               <button type="button" onClick={() => setDeleteOpen(false)} disabled={deleting}
+                className="arciv-hov"
                 style={{
                   padding: "9px 16px", border: "1.5px solid var(--line)", borderRadius: 10,
                   fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
                   background: "var(--surface-2)", color: "var(--ink-2)",
+                  "--hov-bg": "var(--surface)", "--hov-line": "var(--muted-2)", "--hov-color": "var(--ink)",
                 }}>
                 Cancel
               </button>
               <button type="button" onClick={handleDeleteAccount} disabled={deleting}
+                className="arciv-hov"
                 style={{
-                  padding: "9px 16px", border: 0, borderRadius: 10,
+                  padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                   fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
                   background: "var(--bad)", color: "#fff",
+                  "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
+                  "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
                 }}>
                 {deleting ? "Deleting…" : "Delete forever"}
               </button>

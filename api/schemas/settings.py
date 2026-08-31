@@ -1,4 +1,15 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# A header value cannot carry control characters — CRLF there is request
+# splitting. Rejected at the write boundary so a bad key never reaches the DB;
+# agent.providers.ollama checks again as a backstop for rows that predate this.
+_CONTROL_CHARS = frozenset(chr(c) for c in list(range(0x20)) + [0x7F])
+
+
+def _reject_control_chars(v: str | None) -> str | None:
+    if v and _CONTROL_CHARS.intersection(v):
+        raise ValueError("must not contain control characters")
+    return v
 
 
 class SettingsResponse(BaseModel):
@@ -23,9 +34,14 @@ class SettingsUpdate(BaseModel):
     # would lock the user out of the one setting that fixes their outage. "" means
     # "back to the provider default".
     ai_model: str | None = Field(default=None, max_length=100)
-    ai_api_key: str | None = None
+    # "" clears the stored credential (Disconnect). Capped at the same 500 as
+    # AIModelsRequest.api_key — no provider key comes near that, and an
+    # unbounded column is a free write amplifier.
+    ai_api_key: str | None = Field(default=None, max_length=500)
     feed_notify_telegram: bool | None = None
     feed_notify_inapp: bool | None = None
+
+    _no_ctrl = field_validator("ai_api_key")(_reject_control_chars)
 
 
 class AITestResult(BaseModel):
@@ -48,16 +64,22 @@ class UsageResponse(BaseModel):
 class AIModelsRequest(BaseModel):
     """Optional overrides for a model listing.
 
-    Both fields let the UI validate a key the user has *typed but not saved*:
-    listing models is the cheapest possible credential check (no completion, no
-    tokens billed), so "paste key → is it good? → here are your models" is one
-    request. An empty body falls back to the stored provider and key.
+    These let the UI validate a key the user has *typed but not saved*, so
+    "paste key → is it good? → here are your models" is one request. For four of
+    the five providers the listing itself is the check, because the catalogue
+    sits behind the key — no completion, no tokens billed. Ollama Cloud's
+    catalogue is public, so its provider probes an auth-gated endpoint first
+    (``OllamaProvider._check_credentials``); the guarantee this endpoint makes to
+    the UI is the same either way. An empty body falls back to the stored
+    provider and key.
 
     Nothing here is persisted. Saving is still an explicit PATCH.
     """
 
     provider: str | None = None
     api_key: str | None = Field(default=None, min_length=1, max_length=500)
+
+    _no_ctrl = field_validator("api_key")(_reject_control_chars)
 
 
 class AIModelsResponse(BaseModel):

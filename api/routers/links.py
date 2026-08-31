@@ -397,7 +397,9 @@ async def generate_insights(
     if current_user.ai_api_key_enc:
         try:
             api_key = decrypt_secret(current_user.ai_api_key_enc)
-            provider = make_provider(current_user.ai_provider, api_key, current_user.ai_model)
+            provider = make_provider(
+                current_user.ai_provider, api_key, current_user.ai_model
+            )
         except Exception:
             pass
     if provider is None and settings.SHARED_GEMINI_KEY:

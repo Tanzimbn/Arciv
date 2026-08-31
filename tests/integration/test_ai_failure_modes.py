@@ -258,3 +258,110 @@ async def test_notification_is_per_user(
                 )
             ).scalars().all()
             assert len(notes) == 1, f"user {uid} got {len(notes)} alerts"
+
+
+# --------------------------------------------------------------------------- #
+# 5. The sweep is bounded — it is the amplifier, not the gate
+# --------------------------------------------------------------------------- #
+
+async def _fail_links(client, headers, session_factory, urls, status="failed"):
+    import uuid as _uuid
+
+    ids = [await _save_link(client, headers, u) for u in urls]
+    async with session_factory() as db:
+        for link_id in ids:
+            link = await db.get(Link, _uuid.UUID(str(link_id)))
+            link.ai_status = status
+            link.ai_error = "boom"
+            link.ai_attempt_count = 4
+        await db.commit()
+    return ids
+
+
+async def test_sweep_caps_the_batch_and_jitters_the_burst(
+    client, app_state, make_user, session_factory, monkeypatch
+):
+    """The sweep resets ``ai_attempt_count``, so unbounded it re-enqueues every
+    failed link an instance has, hourly, onto the same queue that carries signup
+    email. The cap bounds the burst; the jitter stops it all landing at :00."""
+    from api.config import settings as cfg
+    from worker.ai_classify import sweep_failed_links
+
+    monkeypatch.setattr(cfg, "SWEEP_BATCH_LIMIT", 2)
+    monkeypatch.setattr(cfg, "SWEEP_PER_USER_LIMIT", 0)  # isolate the batch cap
+    _, alice = await _byok_user(make_user)
+    await _fail_links(
+        client, alice, session_factory,
+        [f"https://example.com/b{i}" for i in range(5)],
+    )
+
+    app_state.jobs.clear()
+    await sweep_failed_links({"redis": app_state})
+
+    enqueued = app_state.job_args("classify_link")
+    assert len(enqueued) == 2
+    for name, _, kwargs in app_state.jobs:
+        if name == "classify_link":
+            assert 0 <= kwargs["_defer_by"].total_seconds() <= 300
+
+
+async def test_sweep_per_user_cap_keeps_one_backlog_from_starving_others(
+    client, app_state, make_user, session_factory, monkeypatch
+):
+    """Applied in SQL, per user. With the cap enforced after a plain LIMIT, the
+    user holding the oldest rows would fill the batch and everyone else would
+    wait out their backlog."""
+    from api.config import settings as cfg
+    from worker.ai_classify import sweep_failed_links
+
+    monkeypatch.setattr(cfg, "SWEEP_BATCH_LIMIT", 100)
+    monkeypatch.setattr(cfg, "SWEEP_PER_USER_LIMIT", 1)
+    _, alice = await _byok_user(make_user)
+    _, bob = await _byok_user(make_user)
+    await _fail_links(
+        client, alice, session_factory, [f"https://example.com/a{i}" for i in range(4)]
+    )
+    bob_ids = await _fail_links(client, bob, session_factory, ["https://example.com/bob"])
+
+    app_state.jobs.clear()
+    await sweep_failed_links({"redis": app_state})
+
+    enqueued = [args[0] for args in app_state.job_args("classify_link")]
+    assert len(enqueued) == 2, "one link per user, not one user's whole backlog"
+    assert str(bob_ids[0]) in enqueued
+
+
+async def test_sweep_rescues_a_link_stranded_at_processing(
+    client, app_state, make_user, session_factory
+):
+    """An arq ``job_timeout`` kill cancels the coroutine, so no ``except`` branch
+    runs and the row sits at ``processing`` — matched by neither the failed-link
+    filter nor ``idx_links_ai_retry``. The watchdog stamp written on entry is how
+    the sweep tells "died" from "still running", so a fresh one must be left
+    alone."""
+    import uuid as _uuid
+    from datetime import datetime, timedelta, timezone
+
+    from worker.ai_classify import sweep_failed_links
+
+    _, alice = await _byok_user(make_user)
+    stranded = await _save_link(client, alice, "https://example.com/stranded")
+    running = await _save_link(client, alice, "https://example.com/running")
+
+    now = datetime.now(timezone.utc)
+    async with session_factory() as db:
+        a = await db.get(Link, _uuid.UUID(str(stranded)))
+        a.ai_status, a.ai_next_retry_at = "processing", now - timedelta(minutes=5)
+        b = await db.get(Link, _uuid.UUID(str(running)))
+        b.ai_status, b.ai_next_retry_at = "processing", now + timedelta(minutes=5)
+        await db.commit()
+
+    app_state.jobs.clear()
+    await sweep_failed_links({"redis": app_state})
+
+    assert app_state.job_args("classify_link") == [(str(stranded),)]
+    rescued = await _get_link(session_factory, stranded)
+    assert rescued.ai_status == "pending"
+    assert rescued.ai_attempt_count == 0
+    assert rescued.ai_next_retry_at is None
+    assert (await _get_link(session_factory, running)).ai_status == "processing"

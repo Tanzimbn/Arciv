@@ -1,14 +1,15 @@
 from agent.base import AIProvider
 
+# Every name this build knows how to instantiate. All five are plain BYOK
+# providers — one API key each, no per-instance switches.
 VALID_PROVIDERS = {"gemini", "groq", "anthropic", "openai", "ollama"}
 
 
 def make_provider(provider: str, api_key: str, model: str | None = None) -> AIProvider:
     """Instantiate AI provider by name.
 
-    ``api_key`` is the base URL for ollama. ``model`` of ``None`` means "use the
-    provider's ``DEFAULT_MODEL``" — that is what ``users.ai_model`` being NULL
-    encodes.
+    ``model`` of ``None`` means "use the provider's ``DEFAULT_MODEL``" — that is
+    what ``users.ai_model`` being NULL encodes.
 
     An unknown name raises instead of quietly returning Gemini: silently calling
     a different provider than the one configured turns a typo into a confusing
@@ -28,7 +29,7 @@ def make_provider(provider: str, api_key: str, model: str | None = None) -> AIPr
         return OpenAIProvider(api_key, model)
     if provider == "ollama":
         from agent.providers.ollama import OllamaProvider
-        return OllamaProvider(base_url=api_key or "http://localhost:11434", model=model)
+        return OllamaProvider(api_key, model)
     raise ValueError(f"Unknown AI provider: {provider!r}")
 
 

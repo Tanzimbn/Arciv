@@ -44,7 +44,7 @@ def patch_models(monkeypatch):
                 return list(result)
 
         def _make(provider, api_key, model=None):
-            # Recorded, so a test can prove *which* credential was used — the
+            # Recorded, so a test can prove *which* credential was used: the
             # typed one, the stored one, or the instance's shared key.
             calls.append((provider, api_key, model))
             return Fake()
@@ -187,6 +187,23 @@ async def test_cache_is_keyed_on_the_credential_not_the_user(
 
     keys = [k async for k in redis_client.scan_iter("ai_models:*")]
     assert len(keys) == 2
+
+
+async def test_a_control_character_in_the_typed_key_is_422(
+    client, app_state, make_user, patch_models
+):
+    """CRLF in a header value is request splitting, and Ollama Cloud is the one
+    provider whose key we put in a header ourselves rather than handing to an
+    SDK. Rejected at the schema, so it never reaches the provider or the DB."""
+    patch_models()
+    _, alice = await _byok_user(make_user, provider="ollama")
+
+    r = await client.post(
+        "/api/settings/ai/models",
+        json={"provider": "ollama", "api_key": "key\r\nX-Evil: 1"},
+        headers=alice,
+    )
+    assert r.status_code == 422, r.text
 
 
 # --------------------------------------------------------------------------- #
@@ -462,3 +479,52 @@ async def test_a_rejected_key_is_not_cached(client, app_state, make_user, patch_
 
     assert len(calls) == 2
     assert [k async for k in redis_client.scan_iter("ai_models:*")] == []
+
+
+# --------------------------------------------------------------------------- #
+# Ollama Cloud is an ordinary keyed provider
+# --------------------------------------------------------------------------- #
+
+async def test_ollama_is_selectable_with_no_instance_flag_involved(
+    client, app_state, make_user, patch_models
+):
+    """There is no operator switch left. Ollama used to need one because the
+    endpoint was a machine the *user* ran; it is a hosted API now, so it is
+    accepted exactly like Groq — and an unknown name is still a 400 naming the
+    valid set, so a typo does not read as policy."""
+    patch_models()
+    _, alice = await _byok_user(make_user)
+
+    r = await client.patch(
+        "/api/settings",
+        json={"ai_provider": "ollama", "ai_api_key": "ollama-aaaa-bbbb-cccc"},
+        headers=alice,
+    )
+    assert r.status_code == 200, r.text
+    assert (await client.get("/api/settings", headers=alice)).json()["ai_provider"] == "ollama"
+
+    r = await client.patch("/api/settings", json={"ai_provider": "llamafile"}, headers=alice)
+    assert r.status_code == 400
+    assert "must be one of" in r.text.lower()
+
+
+async def test_the_ollama_key_is_masked_like_every_other_provider(
+    client, app_state, make_user
+):
+    """It used to be returned in full, because it was a base URL — an address
+    the user typed, not a secret, and masking it made the connected card
+    unreadable ("http...1434"). A cloud key is a bearer token, so the exemption
+    has to go with the self-hosted support that justified it.
+    """
+    _, alice = await _byok_user(make_user, provider="ollama")
+    key = "ollama-aaaa-bbbb-cccc-dddd-3456"
+
+    r = await client.patch(
+        "/api/settings", json={"ai_provider": "ollama", "ai_api_key": key}, headers=alice
+    )
+    assert r.status_code == 200, r.text
+
+    body = (await client.get("/api/settings", headers=alice)).text
+    assert key not in body
+    masked = json.loads(body)["ai_api_key_masked"]
+    assert masked.startswith("olla") and masked.endswith("3456")

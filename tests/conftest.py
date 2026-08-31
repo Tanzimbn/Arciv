@@ -264,6 +264,9 @@ class FakeArqPool:
     async def set(self, key, value, ex=None, nx=False):
         return await self._redis.set(key, value, ex=ex, nx=nx)
 
+    async def delete(self, *keys):
+        return await self._redis.delete(*keys)
+
 
 def canonicalize_offline(url: str) -> str:
     """Network-free stand-in for ``canonicalize_url``.
