@@ -218,6 +218,9 @@ export const api = {
   getUsage: () => request("GET", "/settings/usage"),
   updateSettings: (patch) => request("PATCH", "/settings", patch),
   testAI: () => request("POST", "/settings/ai/test"),
+  // Body is optional: {provider, api_key} lists models for a key the user has
+  // typed but not saved — POST so the key never lands in a URL or a log.
+  listAIModels: (body) => request("POST", "/settings/ai/models", body || {}),
 
   exportData: () => downloadExport(),
   deleteAccount: (password) => request("DELETE", "/account", { password }),

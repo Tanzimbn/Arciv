@@ -1,4 +1,3 @@
-import ipaddress
 from datetime import datetime
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -6,6 +5,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from api.config import settings
+from api.utils.safe_fetch import UnsafeURLError, safe_request, safe_stream
 
 TRACKING_PARAMS = {
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
@@ -16,36 +16,6 @@ HEADERS = {
     "User-Agent": settings.USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-]
-
-
-def _assert_safe_url(url: str) -> None:
-    """
-    Validates that the URL uses a supported scheme and is not an internal/private address.
-    """
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
-    host = parsed.hostname
-    if not host:
-        raise ValueError("URL has no hostname")
-    try:
-        addr = ipaddress.ip_address(host)
-        if any(addr in net for net in _PRIVATE_NETWORKS):
-            raise ValueError("Requests to private/internal addresses are not allowed")
-    except ValueError as e:
-        if "private" in str(e) or "internal" in str(e):
-            raise
-
 
 def _unwrap_redirect_url(url: str) -> str:
     """Extract the real destination from JS-redirect wrapper URLs (e.g. google.com/url?q=...)."""
@@ -59,14 +29,21 @@ def _unwrap_redirect_url(url: str) -> str:
 
 
 async def canonicalize_url(url: str) -> str:
-    """Follows redirects, strips tracking params, and normalizes trailing slash for a URL."""
-    _assert_safe_url(url)
+    """Follows redirects, strips tracking params, and normalizes trailing slash for a URL.
+
+    Raises ``UnsafeURLError`` (a ``ValueError``) for a URL that must not be
+    fetched; callers turn that into a 400. A URL that is merely unreachable is
+    kept as-is, so a dead or typo'd domain still saves.
+    """
     url = _unwrap_redirect_url(url)
-    _assert_safe_url(url)
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-            async with client.stream("GET", url, headers=HEADERS) as resp:
-                final_url = str(resp.url)
+        # Streamed: only the destination matters here, so there's no reason to
+        # pull the page body over the wire.
+        async with safe_stream("GET", url, headers=HEADERS) as (_resp, logical_url):
+            # The *logical* URL, not resp.url — the connection is pinned to a
+            # validated IP, so resp.url is an address. Storing that would make
+            # canonical URLs IP-based and break UNIQUE (user_id, canonical_url).
+            final_url = logical_url
     except (httpx.TimeoutException, httpx.RequestError):
         final_url = url
 
@@ -106,21 +83,21 @@ async def fetch_metadata(url: str) -> dict:
     }
 
     try:
-        _assert_safe_url(url)
-    except ValueError:
-        result["fetch_status"] = "unreachable"
-        return result
-
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-            resp = await client.get(url, headers=HEADERS)
-            resp.raise_for_status()
-    except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+        resp, final_url = await safe_request("GET", url, headers=HEADERS, timeout=10.0)
+        resp.raise_for_status()
+    except (
+        UnsafeURLError,
+        httpx.TimeoutException,
+        httpx.HTTPStatusError,
+        httpx.RequestError,
+    ):
         result["fetch_status"] = "unreachable"
         return result
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    parsed = urlparse(url)
+    # Relative favicon hrefs resolve against where the page actually landed, and
+    # final_url is the logical (hostname-based) URL, never the pinned address.
+    parsed = urlparse(final_url)
     base = f"{parsed.scheme}://{parsed.netloc}"
 
     # Title: og:title > <title>
@@ -169,15 +146,14 @@ async def fetch_metadata(url: str) -> dict:
 async def fetch_article_text(url: str, max_chars: int = 6000) -> str:
     """Fetch readable article text for AI processing. Returns empty string on failure."""
     try:
-        _assert_safe_url(url)
-    except ValueError:
-        return ""
-
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=12.0) as client:
-            resp = await client.get(url, headers=HEADERS)
-            resp.raise_for_status()
-    except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+        resp, _final_url = await safe_request("GET", url, headers=HEADERS, timeout=12.0)
+        resp.raise_for_status()
+    except (
+        UnsafeURLError,
+        httpx.TimeoutException,
+        httpx.HTTPStatusError,
+        httpx.RequestError,
+    ):
         return ""
 
     soup = BeautifulSoup(resp.text, "html.parser")

@@ -30,6 +30,19 @@ def test_envelope_round_trip():
     assert decrypt_secret(blob) == PLAINTEXT
 
 
+def test_awkward_characters_round_trip_and_rewrap():
+    """Provider keys are opaque strings, not the `sk-` shape the other cases use.
+
+    Base64-ish payloads (`+`, `/`, `=`) and colons all appear in real keys, and
+    rotation has to move them too — dropping a retired KEK must not lock a user
+    out of a key that happened to contain one."""
+    key = "abc:not-a-real-key/+="
+    blob = encrypt_secret(key)
+    assert key not in blob
+    assert decrypt_secret(blob) == key
+    assert decrypt_secret(rewrap_secret(blob)) == key
+
+
 def test_envelope_blob_carries_active_kek_id(monkeypatch):
     from api.config import settings
 
@@ -125,12 +138,25 @@ def test_tampered_ciphertext_is_rejected():
 @pytest.mark.parametrize(
     "key,expected",
     [
-        ("sk-1234567890abcdef", "sk-1...****"),
+        # Long enough to spare a tail: the last 4 are what tells one key from
+        # another after a rotation. Prefixes are shared by every key a provider
+        # issues, so a prefix-only mask identifies nothing.
+        ("sk-1234567890abcdef", "sk-1...cdef"),
+        ("gsk_" + "x" * 52, "gsk_...xxxx"),
+        # Short enough that 8 revealed characters would be most of the secret.
         ("short", "****"),
         ("exactly8", "****"),
+        ("123456789012345", "1234...****"),
     ],
 )
-def test_mask_api_key_never_leaks_the_tail(key, expected):
+def test_mask_api_key_reveals_at_most_eight_characters(key, expected):
+    """The mask must be recognisable and still useless as a credential."""
     masked = mask_api_key(key)
     assert masked == expected
-    assert key[4:] not in masked or len(key) <= 8
+    revealed = sum(1 for c in masked if c not in ".*")
+    assert revealed <= 8
+    assert revealed < len(key)
+    # The middle never survives — a mask is not a prefix of the key with dots.
+    assert key not in masked
+    if len(key) >= 16:
+        assert key[4:-4] not in masked

@@ -86,6 +86,18 @@ class Settings(BaseSettings):
 
     USER_AGENT: str = "Arciv/0.1 (+https://github.com/tanzimbn/arciv)"
 
+    # Outbound-fetch safety (api/utils/safe_fetch.py). Every URL this app fetches
+    # comes from a user, and the containers can reach Postgres, Redis, the embed
+    # service and the cloud instance-metadata endpoint.
+    # KEEP THIS FALSE on anything reachable from the public internet: true lets any
+    # signed-up user use the fetchers to read your private network, and
+    # fetch_article_text returns the response body to them.
+    # Self-hosters who genuinely want to save links from their own LAN can set it.
+    ALLOW_PRIVATE_NETWORK_FETCH: bool = False
+    # Redirect hops allowed per fetch. Every hop is re-validated and re-pinned, so
+    # this bounds work, not safety.
+    MAX_FETCH_REDIRECTS: int = 5
+
     # Public-launch abuse/DoS guards. All default to "off" (0 / False) so
     # self-hosting stays unrestricted; a hosted deployment sets real ceilings.
     # Per-user rate limits (fixed-window Redis counters keyed by user_id).
@@ -97,6 +109,31 @@ class Settings(BaseSettings):
     LINKS_CREATE_PER_MINUTE: int = 20  # POST /api/links (metadata fetch + enqueue)
     SEARCH_PER_MINUTE: int = 30  # GET /api/links/search (each call embeds q)
     INSIGHTS_PER_MINUTE: int = 10  # POST /api/links/:id/insights (inline LLM call)
+    # POST /api/feeds/discover — fetches the page plus up to 5 COMMON_PATHS probes,
+    # so one call is several outbound requests. Lowest limit of the set.
+    FEEDS_DISCOVER_PER_MINUTE: int = 10
+    # GET /api/settings/ai/models — one call to the user's AI provider. Low
+    # because the UI needs it once per Settings visit and the answer is cached.
+    AI_MODELS_PER_MINUTE: int = 6
+    # How long a provider's model list stays cached, per (provider, key hash).
+    # Model catalogues change on the order of weeks; an hour keeps Settings snappy
+    # without pinning a stale list past a user rotating their key. 0 = no cache.
+    AI_MODELS_CACHE_TTL: int = 3600
+
+    # --- Ollama Cloud ---
+    # Chat/list timeouts, seconds. Ollama is the one provider we call over plain
+    # HTTP rather than through an SDK, so the timeout is ours to set. Keep both
+    # well under WorkerSettings.job_timeout (120): an arq timeout kill cancels
+    # the coroutine and runs none of the error handling, which strands the link
+    # at ai_status="processing".
+    OLLAMA_TIMEOUT: int = 60
+    OLLAMA_LIST_TIMEOUT: int = 15
+    # Links requeued per sweep_failed_links run, and per user within one run
+    # (0 = unlimited). The sweep resets ai_attempt_count, so an unbounded sweep
+    # lets one broken provider dump thousands of jobs onto the same queue that
+    # carries signup email.
+    SWEEP_BATCH_LIMIT: int = 200
+    SWEEP_PER_USER_LIMIT: int = 20
     # Auth-route rate limits (per client IP). slowapi rate strings, e.g. "5/minute",
     # "20/hour". Guard against credential stuffing / signup + email-send abuse.
     AUTH_REGISTER_RATE_LIMIT: str = "20/hour"

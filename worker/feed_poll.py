@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime, timezone
 
-import httpx
 from sqlalchemy import select
 
 from api.database import AsyncSessionLocal
 from api.models.feed import Feed, FeedItem
 from api.models.notification import Notification
 from api.utils.feed_discovery import entry_guid, parse_feed_content
+from api.utils.safe_fetch import safe_request
 
 DEGRADED_THRESHOLD = 7
 DEAD_THRESHOLD = 30
@@ -27,8 +27,12 @@ async def poll_single_feed(ctx, feed_id: str) -> None:
             headers["If-Modified-Since"] = feed.last_modified
 
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-                resp = await client.get(feed.feed_url, headers=headers)
+            # A stored feed_url is still user input, and the name it points at can
+            # start resolving somewhere private long after the user subscribed —
+            # so the poll validates on every run, not just at subscribe time.
+            resp, _final_url = await safe_request(
+                "GET", feed.feed_url, headers=headers, timeout=15.0
+            )
 
             now = datetime.now(timezone.utc)
 

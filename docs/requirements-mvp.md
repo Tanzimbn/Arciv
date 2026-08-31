@@ -317,7 +317,7 @@ Linking Telegram to a Arciv account is done via a one-time token from the Settin
 
 **NFR-S-02** — All database queries must be scoped to the authenticated user's ID. No cross-user data access is possible.
 
-**NFR-S-03** — AI API keys are encrypted at rest (AES-256). They are never returned in API responses — only a masked version (`sk-...****`) is shown in the UI.
+**NFR-S-03** — AI API keys are encrypted at rest (AES-256). They are never returned in API responses — only a masked version (`sk-1...cdef` — first 4 and last 4) is shown in the UI.
 
 **NFR-S-04** — Rate limiting on the link submission endpoint: max 30 links per user per hour.
 

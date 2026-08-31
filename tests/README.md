@@ -102,12 +102,56 @@ opened them — a fresh loop per test would hand out connections attached to a d
 one. Don't lower this to `function` scope without also rebuilding the engine per
 test.
 
-## Known gap
+## Outbound fetching
 
-`api/utils/metadata._assert_safe_url` blocks private **IP literals** but never
-resolves hostnames, so `http://internal-host/` reaches the fetcher. This is
-documented as an accepted limitation in
-`tests/test_ssrf_guard.py::test_known_gap_hostnames_are_not_resolved` rather than
-left silent. Closing it means resolving the host, validating every returned
-address, and pinning the connection to a validated one to defeat DNS rebinding —
-if that lands, invert that test.
+`tests/test_ssrf_guard.py` owns the policy in `api/utils/safe_fetch.py`: blocked
+address classes, hostname resolution, per-hop redirect revalidation, and that the
+connection is pinned to the validated address while `Host` and `sni_hostname` keep
+the real hostname. Two things there are easy to break by accident:
+
+- **Never let a test do real DNS.** Patch `safe_fetch._resolve`; the `no_network`
+  fixture only catches real HTTP, not `getaddrinfo`.
+- **`safe_request` returns `(response, logical_url)`.** The logical URL is
+  hostname-based; `response.url` is the pinned IP. Anything feeding
+  canonicalisation must use the former or DB-level dedup breaks silently —
+  `test_final_url_is_logical_not_the_pinned_address` pins that.
+
+`test_no_module_fetches_a_user_url_outside_safe_fetch` scans the fetcher modules'
+source, so a new `httpx.get(user_url)` fails CI instead of shipping unguarded. Add
+the module to its watch list when you add a fetcher.
+
+`tests/integration/test_outbound_guard.py` covers the paths that swallow every
+exception and write to the DB instead of returning anything — feed poll, link
+create, subscribe seeding — where row state is the only observable proof the guard
+fired.
+
+## AI failure modes
+
+Three files, one invariant between them: a request that **cannot** succeed must
+not be retried, and the user must be told.
+
+- `tests/test_provider_errors.py` (unit) — `agent/errors.raise_mapped` maps by
+  **status code**, never by message substring. The stand-in exception classes are
+  deliberate: the three OpenAI-codegen SDKs need a live `httpx.Request` to build
+  an `APIStatusError`, and the attribute shape (`status_code` / `.code` /
+  `.response.status_code`) is the whole contract. The same file pins
+  `human_message` against the real error strings each provider emits — Groq's
+  python-dict repr, OpenAI's JSON, Gemini's bare `400 …` text, Ollama's
+  `{"error": "…"}` — plus the two invariants that matter more than any single
+  shape: unparseable text is returned verbatim, and an empty message still says
+  something.
+- `tests/integration/test_ai_failure_modes.py` — a permanent error ends the link
+  on attempt 1 with no job re-enqueued, `sweep_failed_links` leaves
+  `ai_error_kind="config"` alone while still requeueing transient failures, and a
+  broken config notifies once per user per day. That sweep case is the regression
+  guard for the original bug: the ladder outran the hourly sweep, so the link read
+  `pending` — "Classifying…" — forever.
+- `tests/integration/test_ai_models_endpoint.py` — `POST /settings/ai/models`.
+  The provider is patched (`no_network` would fail a real call), but the Redis
+  cache and rate-limit counters are the live ones. Cache tests set
+  `AI_MODELS_CACHE_TTL = 0` to force every request past the cache — that value
+  must disable the cache, not reach Redis, which rejects `SET … EX 0`. The
+  `patch_models` fake records `(provider, api_key, model)`, because *which*
+  credential answered is the contract: a key typed into the body must be used
+  instead of the stored one and must not be persisted, and a refused key must be
+  a 400, not a 502.

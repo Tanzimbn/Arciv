@@ -46,7 +46,7 @@ All five MVP phases are scaffolded: foundation, link saving, AI pipeline, feed t
 
 - **Smart link saving** — paste a URL, get metadata extraction, canonicalization, and dedup at the DB level.
 - **AI-powered classification** — links are categorized as `article`, `video`, `tool`, `research-paper`, etc. and routed to the right queue. Each one gets a 2–3 sentence summary and a handful of tags.
-- **Bring your own provider** — works out of the box with **Gemini**, **Groq**, **Anthropic Claude**, **OpenAI**, or local **Ollama**. Keys are encrypted at rest with AES-256.
+- **Bring your own provider** — works out of the box with **Gemini**, **Groq**, **Anthropic Claude**, **OpenAI**, or **Ollama Cloud**. Keys are encrypted at rest with AES-256.
 - **Graceful AI fallback** — if no provider is configured (or the provider rate-limits you), links fall back to URL-pattern heuristics. The system never blocks on AI.
 - **Feed tracking, the polite way** — subscribe to RSS/Atom feeds and receive a single grouped notification per feed when new posts appear. **No auto-ingest** — you decide what to save. RSS auto-discovery, ETag/Last-Modified conditional polling, failure handling (degraded at 7 consecutive failures, dead at 30).
 - **In-app notifications** — bell icon with unread counter, accessible across the app.
@@ -137,15 +137,21 @@ All configuration is via `.env`. See [.env.example](.env.example) for every vari
 
 Configure your provider in **Settings**. The system uses one provider at a time per user; API keys are encrypted with AES-256 before they hit the database.
 
+**Model** is also chosen in Settings, per user. The dropdown is populated live from your provider's own catalogue using your key, so a model your account can't reach never appears. Leave it on *Provider default* to use the model below. Providers retire models on their own schedule — picking a new one in Settings is the fix, no redeploy.
+
 | Provider | Default model | Cost | Notes |
 |---|---|---|---|
 | **Google Gemini** | `gemini-2.0-flash` | Free tier available | Default. Free-tier quota varies by region. |
-| **Groq** | `llama-3.1-8b-instant` | Free tier available | Fast inference, generous free quota. |
+| **Groq** | `llama-3.3-70b-versatile` | Free tier available | Fast inference, generous free quota. |
 | **Anthropic Claude** | `claude-haiku-4-5` | Paid | Best quality for the cost. |
 | **OpenAI** | `gpt-4o-mini` | Paid | Industry standard. |
-| **Ollama** | Local | Free | Self-host the model alongside Arciv. |
+| **Ollama Cloud** | `gpt-oss:120b` | Free tier available | Open-weight models, hosted. Key from [ollama.com/settings/keys](https://ollama.com/settings/keys). |
 
-**Retry behavior:** AI jobs retry on transient errors at 2 min → 10 min → 1 hour, then mark `ai-failed`. Failed jobs are swept back into the queue hourly. If your account has zero quota (`limit: 0`), all retries will fail — switch providers or top up.
+The defaults are current at the time of writing, not a guarantee — they are the value used when you pick no model.
+
+**Retry behavior:** AI jobs retry on *transient* errors (provider 5xx, rate limits) at 2 min → 10 min → 1 hour, then mark `ai-failed`; failed jobs are swept back into the queue hourly.
+
+*Permanent* errors are not retried. A retired or unknown model, or a rejected API key, fails the link immediately and raises one in-app notification carrying the provider's own message — retrying an identical request that cannot succeed only hides the problem. Fix the model or key in Settings, then hit **Retry** on the link. If your account has zero quota (`limit: 0`), all retries will fail — switch providers or top up.
 
 ## Feed Tracking
 
