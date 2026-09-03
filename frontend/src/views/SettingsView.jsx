@@ -134,7 +134,7 @@ function ToggleRow({ checked, onChange, label, description, last }) {
 }
 
 /* ── Main ─────────────────────────────────────────────────── */
-export default function SettingsView({ onBack }) {
+export default function SettingsView({ onNavigate, onLogout }) {
   const { isMobile } = useBreakpoint();
   const [settings, setSettings] = useState(null);
   const [usage, setUsage] = useState(null);
@@ -240,14 +240,14 @@ export default function SettingsView({ onBack }) {
 
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
-      <SubpageNav onBack={onBack} />
+    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
+      <SubpageNav active="settings" onNavigate={onNavigate} onLogout={onLogout} />
 
       {/* Page */}
       <main className="arciv-page-pad" style={{ maxWidth: 720, margin: "0 auto", padding: isMobile ? "20px 16px 80px" : "36px 28px 80px" }}>
         {/* Heading */}
         <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
+          <h1 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
             Settings
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--muted)", margin: "6px 0 0" }}>
@@ -364,7 +364,7 @@ export default function SettingsView({ onBack }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[
                       "Generate a token below",
-                      <>Send <code style={{ background: "var(--surface-2)", padding: "1px 7px", borderRadius: 5, fontFamily: "monospace", fontSize: 12, border: "1px solid var(--line)" }}>/start &lt;token&gt;</code> to @arciv_bot</>,
+                      <>Send <code style={{ background: "var(--surface-2)", padding: "1px 7px", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 12, border: "1px solid var(--line)" }}>/start &lt;token&gt;</code> to @arciv_bot</>,
                       "Your account will be linked automatically",
                     ].map((step, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -401,7 +401,7 @@ export default function SettingsView({ onBack }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <code style={{
                           flex: 1, background: "var(--surface)", border: "1.5px solid color-mix(in oklab, var(--accent) 20%, transparent)",
-                          borderRadius: 9, padding: "10px 12px", fontSize: 12.5, fontFamily: "monospace",
+                          borderRadius: 9, padding: "10px 12px", fontSize: 12.5, fontFamily: "var(--font-mono)",
                           wordBreak: "break-all", color: "var(--ink)", letterSpacing: "0.04em",
                         }}>
                           {telegramToken}
@@ -504,9 +504,9 @@ export default function SettingsView({ onBack }) {
                   style={{
                     padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                     fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    background: "var(--bad)", color: "#fff", whiteSpace: "nowrap", flexShrink: 0,
+                    background: "var(--bad)", color: "var(--on-color)", whiteSpace: "nowrap", flexShrink: 0,
                     "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
-                    "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
+                    "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "var(--on-color)",
                   }}>
                   Delete account
                 </button>
@@ -531,7 +531,7 @@ export default function SettingsView({ onBack }) {
             border: "1px solid var(--line)", borderRadius: 16, padding: 24,
             boxShadow: "0 20px 60px rgba(0,0,0,.3)",
           }}>
-            <h2 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 26, margin: "0 0 8px", color: "var(--ink)" }}>
+            <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: "0 0 8px", color: "var(--ink)" }}>
               Delete your account?
             </h2>
             <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55, margin: "0 0 18px" }}>
@@ -568,9 +568,9 @@ export default function SettingsView({ onBack }) {
                 style={{
                   padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                   fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
-                  background: "var(--bad)", color: "#fff",
+                  background: "var(--bad)", color: "var(--on-color)",
                   "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
-                  "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
+                  "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "var(--on-color)",
                 }}>
                 {deleting ? "Deleting…" : "Delete forever"}
               </button>
