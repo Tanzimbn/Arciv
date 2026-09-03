@@ -49,11 +49,16 @@ All five MVP phases are scaffolded: foundation, link saving, AI pipeline, feed t
 - **Bring your own provider** — works out of the box with **Gemini**, **Groq**, **Anthropic Claude**, **OpenAI**, or **Ollama Cloud**. Keys are encrypted at rest with AES-256.
 - **Graceful AI fallback** — if no provider is configured (or the provider rate-limits you), links fall back to URL-pattern heuristics. The system never blocks on AI.
 - **Feed tracking, the polite way** — subscribe to RSS/Atom feeds and receive a single grouped notification per feed when new posts appear. **No auto-ingest** — you decide what to save. RSS auto-discovery, ETag/Last-Modified conditional polling, failure handling (degraded at 7 consecutive failures, dead at 30).
+- **Semantic search** — find a link by describing it ("that article about Go concurrency"), not by remembering its title. Every link is embedded at save time; search ranks by cosine similarity.
+- **Topics** — tags grouped into a topic rail above the list, scoped to the queue tab you're on, so a chip's count is exactly what clicking it shows. Derived on read; nothing to reindex.
+- **Related links** — a Similar section in the link drawer, plus notes and on-demand AI insights per link.
 - **In-app notifications** — bell icon with unread counter, accessible across the app.
 - **Optional Telegram bot** — link your account with a one-time token, save URLs via DM, receive daily digests. Off by default behind a feature flag.
 - **Production-grade auth** — email verification (block-until-verified), short-lived access JWT + rotating refresh tokens, password reset, password-strength rules, and per-endpoint rate limiting. Verification/reset email via Gmail API or SMTP.
 - **Admin monitoring panel** — an `/admin` dashboard (gated by `ADMIN_EMAILS`) showing daily traffic, unique visitors, and signups, plus user management. Metrics use lightweight Redis aggregate counters (no per-request rows, IPs hashed).
-- **Single-command self-hosting** — `docker compose up`. Postgres, Redis, API, worker, all in one stack. Frontend served by FastAPI in production.
+- **Own your data** — self-serve JSON export (`GET /api/account/export`) and account deletion, both from Settings.
+- **Safe to leave open** — per-minute rate limits on write and search routes, per-account link/feed/storage quotas, disposable-email blocking, optional Cloudflare Turnstile on signup.
+- **Single-command self-hosting** — `docker compose up`. Postgres, Redis, API, worker, and the embedding service, all in one stack. Frontend served by FastAPI.
 - **Cron-driven feed polling** — configurable schedule (default daily at 08:00 UTC).
 
 ## Quick Start
@@ -95,6 +100,18 @@ docker compose up -d
 
 Arciv is now serving at **http://localhost:8000**. Migrations run automatically on API startup.
 
+The **first** run builds two images and is slow (~5 min): it installs the frontend
+dependencies, builds the SPA, and bakes the ONNX embedding model into the API
+image so containers start with no cold-start download. Later runs reuse the cache.
+
+`docker compose up` also starts two services beyond db/redis/api/worker:
+
+- `embed` — the embedding model, loaded once and shared by api + worker over HTTP instead of each holding its own ~400MB copy.
+- `mailhog` — a local SMTP catcher on http://localhost:8025, so verification and reset emails are viewable without a real mail provider. Set `EMAIL_ENABLED=true`, `SMTP_HOST=mailhog`, `SMTP_PORT=1025`, `SMTP_STARTTLS=false` in `.env` to use it.
+
+Published host ports are `8000` (api), `5432` (db), `6379` (redis), `8001`
+(embed), `1025`/`8025` (mailhog). Stop anything already holding those first.
+
 ### 5. First steps
 
 1. Register at http://localhost:8000.
@@ -110,8 +127,8 @@ All configuration is via `.env`. See [.env.example](.env.example) for every vari
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection URL (provided by Compose default) |
-| `REDIS_URL` | Redis URL for the ARQ job queue (provided by Compose default) |
+| `DATABASE_URL` | PostgreSQL connection URL — `.env.example` already points at the Compose `db` service |
+| `REDIS_URL` | Redis URL for the ARQ job queue — likewise preset to the Compose `redis` service |
 | `SECRET_KEY` | JWT signing key — generate with `openssl rand -hex 32` |
 | `ENCRYPTION_KEY` | AES-256 key for stored AI provider keys — generate with `openssl rand -hex 32` |
 
@@ -199,7 +216,7 @@ Disabled by default. To enable:
 |---|---|---|
 | Backend API | Python + FastAPI (async) | Async I/O suits the AI + RSS workload |
 | Job queue | ARQ + Redis | Persistent jobs survive worker restarts |
-| Database | PostgreSQL 16 | Reliability + `TIMESTAMPTZ` + future pgvector |
+| Database | PostgreSQL 16 + pgvector | Reliability + `TIMESTAMPTZ`; `vector` columns back semantic search (`pgvector/pgvector:pg16` image) |
 | Frontend | React + Vite + TailwindCSS | Built into a static bundle, served by FastAPI |
 | Auth | JWT (`python-jose`) + bcrypt | Stateless, no session store |
 | Encryption | `cryptography` (AES-GCM) | API keys at rest |
@@ -270,6 +287,12 @@ npm ci
 npm run dev          # dev server at http://localhost:5173 (proxies /api to :8000)
 npm run build        # builds frontend/dist for production
 ```
+
+Under Compose the SPA served at :8000 is the copy baked into the API image, not
+your working tree — the bind mounts cover the Python packages only, deliberately
+(see the comment at the top of `docker-compose.yml`). So use the Vite dev server
+above while working on the frontend, and `docker compose build api` when you want
+the change inside the container.
 
 ### Tests
 
@@ -345,7 +368,7 @@ docker compose logs -f worker   # worker only
 
 ## Security
 
-- **Encryption at rest:** AI provider API keys are AES-GCM encrypted with `ENCRYPTION_KEY` before storage. Rotating `ENCRYPTION_KEY` invalidates all stored keys (users re-enter them).
+- **Encryption at rest:** AI provider API keys are AES-GCM encrypted before storage, under envelope encryption — a per-key DEK wrapped by the KEK from `ENCRYPTION_KEY`. Rotation does not invalidate stored keys: bump `ENCRYPTION_KEY_ID`, put the new secret in `ENCRYPTION_KEY`, and move the old one to `ENCRYPTION_KEYS_RETIRED` (`id:secret,id:secret`) so existing rows keep decrypting while new writes use the new KEK.
 - **Authentication:** short-lived access JWT (HS256, 15 min default) plus a DB-backed refresh token with rotation and revocation. Email verification is required before login; password reset over single-use Redis tokens; password-strength rules on register/reset. Auth endpoints are rate-limited (login, register, forgot/resend, reset).
 - **Multi-tenancy:** every database query filters on `user_id`. Cross-user access is structurally impossible. Admin endpoints (`/api/admin/*`) are gated by `ADMIN_EMAILS`.
 - **Production hardening:** interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled when `ENVIRONMENT=production`.
@@ -362,6 +385,19 @@ cp .env.example .env
 # Edit .env: set ENVIRONMENT=production, generate fresh secrets, enable Telegram if wanted
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+The prod overlay does **not** ship a database password. Set `POSTGRES_PASSWORD`
+in `.env` and make `DATABASE_URL` match it, or Postgres comes up with a blank
+password and the API cannot connect:
+
+```env
+POSTGRES_PASSWORD=<generate one>
+DATABASE_URL=postgresql://arciv:<same password>@db:5432/arciv
+```
+
+The overlay also drops the source bind mounts and the `--reload` flag, and adds
+`nginx` on `:80`/`:443`. TLS is commented out in [nginx.conf](nginx.conf) — put
+your certs in `./ssl` and uncomment the `443` server block before exposing it.
 
 ### Pre-built images
 
@@ -408,26 +444,41 @@ If you're working on something that touches the spec (`docs/requirements-mvp.md`
 - Production auth hardening — email verification, refresh-token rotation, password reset, rate limiting
 - Gmail API email backend (works where SMTP ports are blocked)
 - Admin monitoring panel — traffic, unique visitors, signups + user management
+- Semantic search — embedding per link at save time (pgvector), `GET /api/links/search`, search box in the UI
+- Similar-links panel, per-link notes, on-demand AI insights
+- Topic explorer — `GET /api/topics`, queue-scoped topic rail
+- Per-user AI model selection, with the model list read live from your provider's catalogue
+- Ollama Cloud replaced self-hosted Ollama as the fifth provider
+- Public-launch hardening — rate limits, quotas, storage cap, signup abuse controls, envelope encryption, legal pages, export + account deletion
+- A real test suite and CI — unit + integration against live Postgres/Redis, plus lint, SPA build, and a secret scan
 
 ## Roadmap
 
 ### Public hosted service
-The direction: run Arciv as a hosted, multi-tenant site so anyone can use it without self-hosting — **bring your own AI provider key** (from the providers the app offers) and go. Self-hosting stays first-class. This is a *deployment/operations layer on top of the existing app*, not a rewrite — the tenancy foundation (`user_id` scoping, AES-256 key encryption, email verification, auth rate limiting, SSRF guard) already exists. What's left before it can safely be public:
-- **Rate limiting on non-auth routes** — `POST /links` and `/links/search` are currently unlimited (auth routes already are). Search especially, since each query runs a server-side embedding.
-- **Per-user resource quotas** — max links / feeds / storage per account, so one user can't fill the DB.
-- **Registration-abuse controls** — throttle / captcha on open signup beyond the current per-IP cap; disposable-email handling.
-- **Key-custody hardening** — a single `ENCRYPTION_KEY` today encrypts every user's provider key; add envelope encryption + a rotation path before holding many users' keys.
-- **Embedding-load control** — cap concurrent embeds (or split embedding to its own service) so search traffic can't starve request handling.
-- **Legal & lifecycle** — Terms of Service, privacy policy, and self-serve data export + account deletion.
+The direction: run Arciv as a hosted, multi-tenant site so anyone can use it without self-hosting — **bring your own AI provider key** (from the providers the app offers) and go. Self-hosting stays first-class. This is a *deployment/operations layer on top of the existing app*, not a rewrite — the tenancy foundation (`user_id` scoping, AES-256 key encryption, email verification, auth rate limiting, SSRF guard) already existed.
 
-Not committed to a date; tracked as the "Public hosted launch" block in [docs/requirements-full.md](docs/requirements-full.md).
+**The hardening layer that gated it has shipped**, all of it off or unlimited by
+default so a self-hoster is unaffected:
+- ~~Rate limiting on non-auth routes~~ — per-minute caps on link create, `/links/search`, insights, feed discovery, and provider model listing (`*_PER_MINUTE` in `.env`).
+- ~~Per-user resource quotas~~ — `MAX_LINKS_PER_USER`, `MAX_FEEDS_PER_USER`, and a per-account storage-bytes cap tracked on `users.storage_bytes`.
+- ~~Registration-abuse controls~~ — disposable-email blocking, a global daily signup ceiling, per-IP guards, and optional Cloudflare Turnstile.
+- ~~Key-custody hardening~~ — envelope encryption with a documented `ENCRYPTION_KEY` rotation path (see [Security](#security)).
+- ~~Embedding-load control~~ — bounded concurrency plus an optional standalone `embed-service/`, which Compose now runs by default.
+- ~~Legal & lifecycle~~ — Terms of Service and privacy policy under [docs/legal/](docs/legal/), `GET /api/account/export`, and `DELETE /api/account`.
 
-### AI productivity layer (next focus)
-The core bet: turn a growing pile of saved links into something queryable and self-surfacing.
-- **Embeddings at save time (pgvector)** — the foundation for everything below
-- **Semantic search** — "that article about Go concurrency" without the title
-- **Similar links** — related saves in the detail drawer; near-duplicate detection at save time
-- **Resurface digest** — AI-ranked weekly nudge of forgotten-but-relevant links (`worker/daily_digest.py` is scaffolded)
+What remains is operational, not code: pick a host, run it, and watch it. Not
+committed to a date; tracked as the "Public hosted launch" block in
+[docs/requirements-full.md](docs/requirements-full.md).
+
+### AI productivity layer
+The core bet: turn a growing pile of saved links into something queryable and self-surfacing. Mostly shipped.
+- ~~Embeddings at save time (pgvector)~~ — `agent/embedding.py`, stored on `links.embedding`
+- ~~Semantic search~~ — "that article about Go concurrency" without the title
+- ~~Similar links~~ — related saves in the detail drawer
+- ~~Topic explorer~~ — tags grouped on read into a queue-scoped topic rail
+- **Resurface digest (next focus)** — AI-ranked weekly nudge of forgotten-but-relevant links (`worker/daily_digest.py` is scaffolded)
+- **Near-duplicate detection at save time** — the embeddings are already there; nothing consumes them for this yet
+- **IVFFlat index on embeddings** — search is a per-user linear scan today, fine at MVP scale
 
 ### v0.2
 - Browser extension for one-click save
