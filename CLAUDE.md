@@ -155,6 +155,51 @@ not reading.
 
 **All data scoped by `user_id`.** Every DB query must include a `user_id` filter. No cross-user access is possible.
 
+**Topics are derived on read; the tag normaliser has an exact SQL twin.**
+`api/utils/tags.py` holds `normalise_tag` (Python) and `tag_key_sql` (SQL) —
+lowercase, whitespace and `_` to `-`, runs collapsed, edges trimmed. One groups
+(`GET /api/topics` unnests `ai_tags` through a LATERAL join and `GROUP BY`s the
+key), the other resolves `?tag=` on `GET /api/links` and `/links/search`. They
+must stay twins: a divergence means a topic chip that says 7 opens a list of 4.
+The same agreement is why narrowing lives in one module: `api/utils/link_query.py`
+holds `apply_queue_scope` and `apply_link_filters`, and **both** the topic list
+and the link list call them. `GET /api/topics?queue=` is what makes the panel
+describe the active tab — on Try Later it lists Try Later's topics with Try
+Later's counts, and a topic with no links in that tab drops off rather than
+offering a click that returns nothing. `queue="archive"` reads *status*, not
+queue, in both places. Duplicating that if/elif into the topics router instead
+would reintroduce exactly the drift this design exists to prevent.
+Character classes are written longhand (`[ \t\n\r\f\v_]+`, never `\s`) because
+Python's `\s` is unicode-aware while Postgres' is locale-dependent, and
+`tests/integration/test_topics.py` asserts the pair agrees inside real Postgres
+on tags containing a literal tab and newline. Normalisation never happens on
+**write** — stored tags keep the model's or the user's chosen casing, since
+rewriting them would overwrite a deliberate hand edit in the drawer and need an
+irreversible backfill. `agent/prompt.py` asks for already-normalised tags to
+reduce divergence at source instead. There is **no GIN index** on `ai_tags`: the
+predicate is over a normalised *element*, which an index on raw values cannot
+answer; the scan is bounded by `MAX_LINKS_PER_USER` and narrowed by
+`idx_links_user_queue`. A tag that normalises to `""` or a malformed `?domain=`
+returns an **empty list**, never the unfiltered library — silently dropping a
+filter looks like a match; with several tags, one unusable key fails the whole
+request under `any` too, since the extra rows would read as real matches.
+**`?tag=` is repeatable** (capped at 10 keys — each is its own `EXISTS` over the
+row's unnested tags) and `?tag_logic=any|all` picks union or intersection.
+Neither logic contains the other — "anything about rust or LLMs" and "the link
+about both" are different questions — so `components/TopicsFilter.jsx` exposes
+the switch instead of assuming one, and repeated spellings of one key
+(`?tag=Rust&tag=rust`) collapse to a single key rather than AND-ing a key with
+itself. The client must send arrays as repeated params (`api/client.js:qs`): a
+plain `URLSearchParams` stringifies `["a","b"]` to `a,b`, which the server reads
+as one topic named `a,b` and matches nothing. `GET /api/links/search` applies filters **before**
+`ORDER BY cosine_distance`: ranking first and filtering the page after turns
+"top 30 matches, 3 tagged rust" into a 3-result search. The `content_type`,
+`domain`, `since` and `until` params have **no UI surface** — the Topics panel
+(plus the queue tabs and the search box it shares a card with) is the only
+discovery control in `LinksView`. They stay because they are the shared
+plumbing `?tag=` and the filter-before-rank search path are built on, and they
+are covered by tests; don't delete them as dead code.
+
 **API keys encrypted at rest.** `ai_api_key_enc` in the DB uses AES-256 (`api/utils/encryption.py`). Keys are never returned in API responses — only a masked version (`sk-1...cdef` — first 4 and last 4; the tail is the part that identifies *which* key it is, since every key from a provider shares its prefix, and keys under 16 chars get no tail at all). One key per account, not one per provider: `ai_api_key_enc` is a single column used with whatever `ai_provider` is set to, so the stored key belongs to the saved provider and Settings must not present it under another one. There is exactly one such column and no per-provider special case: all five providers, Ollama included, store an opaque secret there and get the same mask. (Ollama used to be the exception — a base URL plus a second `ai_auth_token_enc` column for the proxy guarding the user's own server — and that whole shape is gone; see the Ollama Cloud principle below.)
 
 **User-supplied URLs are fetched only via `api/utils/safe_fetch.py`.** `safe_request` / `safe_stream` resolve the host, reject it if any address is private/loopback/link-local/reserved/CGNAT, and pin the connection to the validated address (`Host` header + TLS SNI keep the real hostname), revalidating every redirect hop. They return `(response, logical_url)` — use `logical_url`, never `response.url` (which is the pinned IP), or canonicalisation and `UNIQUE (user_id, canonical_url)` dedup break silently. Never add a bare `httpx` call on a user URL; `tests/test_ssrf_guard.py::test_no_module_fetches_a_user_url_outside_safe_fetch` scans for it. Operator-configured clients (mailer, Turnstile, embed service) take no user input and stay outside this. **`agent/providers/ollama.py` stays inside anyway**, and stays on the drift-scan watch list, for a different reason: its URL is now the constant `https://ollama.com`, so this is no longer SSRF, but every one of its four requests (`/api/chat` ×2, `/api/tags`, `/api/ps`) carries the user's bearer key. `_fetch_chain` follows redirects itself, so it also reimplements httpx's cross-origin credential strip: `Authorization`/`Cookie`/`Proxy-Authorization` are dropped when a hop changes `(scheme, host, port)` — without it a `302` off ollama.com would hand a user's API key to a third party. `safe_request` accepts a `json` body for this; a 301/302/303 hop drops the body and switches to GET, per RFC. `ALLOW_PRIVATE_NETWORK_FETCH=true` reopens private targets for LAN self-hosters saving links off their own network — it must stay `false` on anything public.
@@ -181,10 +226,11 @@ POST   /api/auth/login
 POST   /api/auth/telegram/link
 
 POST   /api/links              # Save URL — returns fast, AI is async
-GET    /api/links              # ?queue=&status=&page=&limit=
+GET    /api/links              # ?queue=&status=&tag=(repeatable)&tag_logic=any|all&content_type=&domain=&since=&until=&page=&limit=
 PATCH  /api/links/:id          # Update queue, content_type, tags, status
 DELETE /api/links/:id
 POST   /api/links/:id/retry-ai
+GET    /api/topics             # ?queue=&min_count=&limit= — ai_tags grouped by normalised key, scoped to the tab
 
 POST   /api/feeds/discover     # Returns feed info without subscribing
 POST   /api/feeds
@@ -228,7 +274,7 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 The suite lives in `tests/`; full setup notes in `tests/README.md`. Two layers:
 
 - **unit** (`tests/test_*.py`) — no services. Encryption + key rotation, storage byte accounting, URL canonicalisation, SSRF guard, heuristics, signup guards, password/JWT primitives.
-- **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search.
+- **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search, topics + link filters.
 
 ```bash
 python3.12 -m venv venv && source venv/bin/activate   # 3.13 has no wheels for asyncpg/pydantic-core at the pinned versions

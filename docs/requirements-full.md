@@ -627,7 +627,7 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-> **Status (2026-08-04).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> **Status (2026-09-01).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
 > Auth was hardened beyond the original scope (email verification, refresh-token
 > rotation, password reset, rate limiting) and an **admin monitoring panel**
 > (daily traffic, unique visitors, signups via Redis aggregate counters) landed
@@ -638,9 +638,13 @@ Classification rules:
 > (`GET /api/links/:id/similar` + the Related section in `LinkDetailDrawer.jsx`).
 > The **"Public hosted launch" hardening layer has also shipped**
 > (see block below and §3.6), and it now has a real test suite and CI behind it
-> (`tests/`, `.github/workflows/ci.yml` — see §11). Remaining Phase 3 work is the
-> rest of the discovery surface: **topic explorer and search filters**, neither
-> built. Phase 4 (proactive resurface + weekly digest) follows.
+> (`tests/`, `.github/workflows/ci.yml` — see §11). **Phase 3 is now complete**:
+> the topic explorer (`GET /api/topics`, `TopicRail`) and the filter layer (tag,
+> type, date, source — on both the link list and semantic search) shipped last,
+> with tag grouping normalised on read in `api/utils/tags.py`. The Topics rail is
+> the only discovery *control* in the UI: it is scoped to the active queue tab, so
+> its counts are the tab's counts. Phase 4 (proactive resurface + weekly digest)
+> is next.
 
 ### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
@@ -677,7 +681,7 @@ user saves what they want via `POST /api/links`.
 
 ---
 
-### Phase 3 — Semantic search & topic explorer 🚧 partly shipped
+### Phase 3 — Semantic search & topic explorer ✅ shipped
 **Goal**: Make the saved library discoverable and connected. **Foundation step:
 generate an embedding per link at save time — the substrate for search,
 similar-items, dedup, and clustering. Shipped** (local fastembed model, stored on
@@ -687,12 +691,41 @@ similar-items, dedup, and clustering. Shipped** (local fastembed model, stored o
 - [x] Natural language search endpoint with embedding-based ranking (`GET /api/links/search`)
 - [x] Search UI — semantic search box in `LinksView` (`api.searchLinks`, debounced)
 - [x] Similar items panel on each link detail view (`GET /api/links/:id/similar` + Related section in `LinkDetailDrawer.jsx`)
-- [ ] Topic cluster view (⭐ next — group by `ai_tags`, show counts; `GET /api/topics`)
-- [ ] Search filters (type, queue, date, source)
+- [x] Topic cluster view (`GET /api/topics` + `TopicsFilter` in `LinksView` — `ai_tags` grouped by normalised key, with counts, scoped to the active queue tab via `?queue=`; multi-select chips combined by Any/All)
+- [x] Search filters (tag, type, date, source) on both `GET /api/links` and `GET /api/links/search` — server-side; the only one with a UI control is `tag`, driven by the Topics rail
 
 > Note: search ranks by cosine similarity over stored embeddings via a linear scan
 > per user — no IVFFlat index yet. Fine at MVP scale; add the index when per-user
 > libraries grow large.
+>
+> Note: topics are **derived on read**, nothing is stored. Tags reach the DB in
+> whatever spelling the model or the user chose, so `api/utils/tags.py` holds the
+> grouping key (`normalise_tag`) and its exact SQL twin (`tag_key_sql`) — one
+> groups, the other resolves `?tag=`, and a divergence means a topic chip showing
+> 7 opens a list of 4. Because the predicate is over a *normalised* element, a GIN
+> index on raw `ai_tags` cannot serve it; the filter is a scan of one user's
+> library, bounded by `MAX_LINKS_PER_USER`. Revisit with an IMMUTABLE normalising
+> function plus a GIN expression index if per-user libraries grow.
+>
+> Note: topic selection is multiple, not single. `?tag=` is repeatable and
+> `?tag_logic=any|all` chooses union or intersection, both resolved in SQL —
+> filtering an already-ranked page client-side would turn "top 30, 3 of them
+> tagged rust" into a 3-result view. The UI exposes the switch because neither
+> logic subsumes the other; the panel also folds away, so readers who never
+> filter don't pay for the chip tail on every list.
+>
+> Note: the panel is scoped to the tab. `GET /api/topics?queue=` runs the caller's
+> selection through `apply_queue_scope` in `api/utils/link_query.py` — the same
+> helper `GET /api/links` uses — so a chip's count is precisely how many links the
+> list below will show once it is clicked. A single explicit filter strip
+> (type/date/source selects) was built and then removed: three controls that each
+> restate what a topic chip already does, competing with it for the same row of
+> screen. The params survive server-side as the plumbing under `?tag=` and
+> filter-before-rank.
+>
+> Note: filters are applied **before** ranking in `GET /api/links/search`. Ranking
+> first and filtering the page afterwards turns "top 30 matches, 3 of them tagged
+> rust" into a 3-result search that hides the rest of the library's rust links.
 
 **Milestone**: User can type "that article about Go concurrency" into search and find it instantly, even without remembering the title.
 
