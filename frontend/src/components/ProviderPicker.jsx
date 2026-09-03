@@ -106,7 +106,7 @@ export function ModelPicker({ provider, seedModels = null, seedDefault = "", val
       placeholder="Leave blank for the provider default"
       style={{
         width: "100%", border: "1.5px solid var(--line)", borderRadius: 10,
-        padding: "10px 13px", fontSize: 13.5, fontFamily: "monospace",
+        padding: "10px 13px", fontSize: 13.5, fontFamily: "var(--font-mono)",
         color: "var(--ink)", background: "var(--surface-2)",
         outline: "none", boxSizing: "border-box",
       }}

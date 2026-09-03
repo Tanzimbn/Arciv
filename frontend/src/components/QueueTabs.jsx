@@ -9,7 +9,7 @@ const TABS = [
   { key: "archive",     label: "Archive",      color: "var(--archive)", desc: "Links you've marked done — your personal trail" },
 ];
 
-export default function QueueTabs({ active, onChange, counts = {} }) {
+export default function QueueTabs({ active, onChange, counts = {}, flat = false }) {
   const scrollRef = useRef(null);
   const activeRef = useRef(null);
   const [fades, setFades] = useState({ left: false, right: false });
@@ -55,9 +55,15 @@ export default function QueueTabs({ active, onChange, counts = {} }) {
       )}
       <div ref={scrollRef} style={{
         display: "flex", alignItems: "center", gap: 4, overflowX: "auto",
-        background: "var(--surface)", border: "1px solid var(--line)",
-        borderRadius: 12, padding: 4, boxShadow: "var(--shadow-card)",
         scrollbarWidth: "none",
+        // `flat` drops the pill: inside the topics filter card these tabs are the
+        // card's first row, and a bordered pill within a bordered card reads as
+        // two containers for one control.
+        background: flat ? "transparent" : "var(--surface)",
+        border: flat ? 0 : "1px solid var(--line)",
+        borderRadius: flat ? 0 : 12,
+        padding: flat ? 0 : 4,
+        boxShadow: flat ? "none" : "var(--shadow-card)",
       }}>
         {TABS.map(({ key, label, color }) => {
           const isActive = active === key;
@@ -84,10 +90,19 @@ export default function QueueTabs({ active, onChange, counts = {} }) {
               )}
               {label}
               <span style={{
-                fontSize: 10.5, fontFamily: "monospace", fontWeight: 500,
+                fontSize: 10.5, fontFamily: "var(--font-mono)", fontWeight: 500,
                 padding: "1px 5px", borderRadius: 5,
-                background: isActive ? "rgba(255,255,255,.15)" : "rgba(31,28,21,.06)",
-                color: isActive ? "rgba(255,255,255,.8)" : "var(--muted)",
+                // Derived from the pill's own ink, not hardcoded white: the
+                // emphasis pill inverts in dark mode (--btn-dark is light
+                // there), so a white count on it was white-on-white. The
+                // inactive wash follows --ink for the same reason — a dark
+                // rgba wash is invisible on a dark surface.
+                background: isActive
+                  ? "color-mix(in oklab, var(--btn-dark-text) 15%, transparent)"
+                  : "color-mix(in oklab, var(--ink) 7%, transparent)",
+                color: isActive
+                  ? "color-mix(in oklab, var(--btn-dark-text) 80%, transparent)"
+                  : "var(--muted)",
               }}>
                 {count}
               </span>

@@ -42,25 +42,16 @@
 .auth-page .left > * { position: relative; z-index: 1 }
 
 .auth-page .brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; cursor: pointer; text-decoration: none }
-.auth-page .brand-mark {
-  width: 38px; height: 38px; border-radius: 11px;
-  background:
-    radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.4), transparent 55%),
-    linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 65%, #1a0c4a));
-  display: grid; place-items: center;
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.6) inset,
-    0 -3px 8px rgba(0,0,0,.2) inset,
-    0 6px 18px -3px color-mix(in oklab, var(--accent) 60%, transparent),
-    0 1px 2px rgba(0,0,0,.08);
+.auth-page .brand-name {
+  font-family: var(--font-serif);
+  font-weight: 400; font-size: 22px; letter-spacing: -0.02em;
 }
-.auth-page .brand-name { font-weight: 600; font-size: 19px; letter-spacing: -0.025em }
 .auth-page .brand-name em { font-style: normal; color: var(--accent) }
 
 .auth-page .hero { max-width: 520px; margin-top: 8vh }
 .auth-page .hero h1 {
-  font-family: 'Instrument Serif', serif; font-weight: 400;
-  font-size: clamp(40px, 5.4vw, 64px); line-height: 1.02; letter-spacing: -0.015em;
+  font-family: var(--font-serif); font-weight: 400;
+  font-size: clamp(37px, 4.9vw, 57px); line-height: 1.08; letter-spacing: -0.02em;
   margin: 0; color: var(--ink);
 }
 .auth-page .hero h1 em { font-style: italic; color: var(--accent) }
@@ -77,7 +68,7 @@
 }
 .auth-page .float-card .top {
   display: flex; align-items: center; gap: 8px;
-  font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; color: var(--muted);
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.08em;
 }
 .auth-page .float-card .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 18%, transparent) }
@@ -92,7 +83,7 @@
   border-color: color-mix(in oklab, var(--accent) 20%, var(--line));
 }
 
-.auth-page .left-foot { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-family: ui-monospace, 'SF Mono', monospace }
+.auth-page .left-foot { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-family: var(--font-mono) }
 .auth-page .left-foot .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--try); box-shadow: 0 0 0 3px color-mix(in oklab, var(--try) 18%, transparent) }
 
 /* ── Right form pane ───────────────────────────────────────── */
@@ -124,12 +115,12 @@
   display: inline-flex; align-items: center; gap: 9px; width: fit-content;
   padding: 5px 11px 5px 8px; border-radius: 999px;
   background: var(--accent-tint); border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
-  font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--accent-deep);
 }
 .auth-page .step-badge .ico { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(22,21,19,.08) }
 
-.auth-page .form-head h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 38px; line-height: 1.05; letter-spacing: -0.015em; margin: 0 }
+.auth-page .form-head h2 { font-family: var(--font-serif); font-weight: 400; font-size: 34px; line-height: 1.12; letter-spacing: -0.02em; margin: 0 }
 .auth-page .form-head p { margin: 10px 0 0; font-size: 14px; color: var(--muted); line-height: 1.55 }
 .auth-page .form-head p b { color: var(--ink-2); font-weight: 600 }
 
@@ -170,12 +161,12 @@
 .auth-page .req { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); letter-spacing: -0.005em; transition: color .2s }
 .auth-page .req .tick { width: 17px; height: 17px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--surface); border: 1.5px solid var(--line); color: transparent; transition: background .2s, border-color .2s, color .2s, transform .2s }
 .auth-page .req.met { color: var(--ink-2) }
-.auth-page .req.met .tick { background: var(--try); border-color: var(--try); color: #fff; transform: scale(1.04) }
+.auth-page .req.met .tick { background: var(--try); border-color: var(--try); color: var(--on-color); transform: scale(1.04) }
 
 .auth-page .strength { display: flex; flex-direction: column; gap: 6px; margin-top: 2px }
 .auth-page .strength-bars { display: flex; gap: 4px }
 .auth-page .strength-bars span { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .25s }
-.auth-page .strength-label { font-family: ui-monospace, 'SF Mono', monospace; font-size: 10.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center }
+.auth-page .strength-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center }
 .auth-page .strength-label b { font-weight: 500; color: var(--ink-2) }
 .auth-page .strength[data-s="1"] .strength-bars span:nth-child(-n+1) { background: #d04a2a }
 .auth-page .strength[data-s="2"] .strength-bars span:nth-child(-n+2) { background: #e08800 }
@@ -196,7 +187,7 @@
 }
 .auth-page .submit:hover { background: var(--btn-dark-hover, #000) }
 .auth-page .submit:active { transform: translateY(1px) }
-.auth-page .submit:disabled { background: var(--muted-2); color: #fff; box-shadow: none; cursor: not-allowed }
+.auth-page .submit:disabled { background: var(--muted-2); color: var(--on-color); box-shadow: none; cursor: not-allowed }
 .auth-page .submit .arrow { transition: transform .2s }
 .auth-page .submit:hover:not(:disabled) .arrow { transform: translateX(2px) }
 
@@ -213,10 +204,10 @@
   box-shadow: var(--shadow-card), 0 10px 28px -12px color-mix(in oklab, var(--accent) 50%, transparent);
 }
 .auth-page .sent-head { text-align: center }
-.auth-page .sent-head h2 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 34px; line-height: 1.08; letter-spacing: -0.015em; margin: 18px 0 0 }
+.auth-page .sent-head h2 { font-family: var(--font-serif); font-weight: 400; font-size: 31px; line-height: 1.14; letter-spacing: -0.02em; margin: 18px 0 0 }
 .auth-page .sent-head p { margin: 10px 0 0; font-size: 14px; color: var(--muted); line-height: 1.6 }
 .auth-page .sent-head p b { color: var(--ink); font-weight: 600 }
-.auth-page .resend { font-family: ui-monospace, 'SF Mono', monospace; font-size: 11px; letter-spacing: 0.04em; text-align: center; color: var(--muted) }
+.auth-page .resend { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-align: center; color: var(--muted) }
 .auth-page .resend a, .auth-page .resend button { color: var(--accent); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer }
 .auth-page .resend a:hover, .auth-page .resend button:hover { text-decoration: underline }
 
@@ -226,7 +217,7 @@
   box-shadow: 0 10px 28px -12px color-mix(in oklab, var(--try) 60%, transparent), 0 1px 2px rgba(22,21,19,.1);
 }
 
-.auth-page .right-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 18px; font-size: 12px; color: var(--muted); font-family: ui-monospace, 'SF Mono', monospace; letter-spacing: 0.04em }
+.auth-page .right-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 18px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); letter-spacing: 0.04em }
 .auth-page .right-foot .links { display: flex; gap: 14px }
 .auth-page .right-foot a { color: var(--muted); text-decoration: none }
 .auth-page .right-foot a:hover { color: var(--ink-2) }
