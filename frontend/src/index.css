@@ -241,15 +241,19 @@ p { text-wrap: pretty; }
 .arciv-lit-wrap:focus-within::after  { opacity: .55; }
 @keyframes arciv-auth-spin { to { --arciv-auth-angle: 360deg; } }
 
-/* ── URL saver — rotating conic gradient border ─────────────── */
+/* ── Rotating conic gradient border ─────────────────────────────
+   The URL saver's ring, reusable. The wrapped element must paint an opaque
+   background of its own: both layers sit at a negative z-index, so a
+   transparent child shows the gradient through its middle instead of as a
+   ring. `--glow-r` matches the wrap's radius to the child's. */
 @property --arciv-saver-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
-.arciv-saver-wrap {
+.arciv-saver-wrap, .arciv-glow-border {
   position: relative;
-  border-radius: 13px;
+  border-radius: var(--glow-r, 13px);
   isolation: isolate;
 }
-.arciv-saver-wrap::before {
+.arciv-saver-wrap::before, .arciv-glow-border::before {
   content: "";
   position: absolute; inset: -1.5px;
   border-radius: inherit;
@@ -268,7 +272,7 @@ p { text-wrap: pretty; }
   opacity: .55;
   transition: opacity .25s, inset .2s, filter .25s;
 }
-.arciv-saver-wrap::after {
+.arciv-saver-wrap::after, .arciv-glow-border::after {
   content: "";
   position: absolute; inset: -1.5px;
   border-radius: inherit;
@@ -288,9 +292,9 @@ p { text-wrap: pretty; }
   opacity: 0;
   transition: opacity .25s;
 }
-.arciv-saver-wrap:hover::before  { opacity: .9; }
-.arciv-saver-wrap:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
-.arciv-saver-wrap:focus-within::after  { opacity: .55; }
+.arciv-saver-wrap:hover::before, .arciv-glow-border:hover::before { opacity: .9; }
+.arciv-saver-wrap:focus-within::before, .arciv-glow-border:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
+.arciv-saver-wrap:focus-within::after, .arciv-glow-border:focus-within::after { opacity: .55; }
 @keyframes arciv-saver-spin { to { --arciv-saver-angle: 360deg; } }
 
 /* Toast */
@@ -371,6 +375,11 @@ body.layout-list .arciv-card {
 .ldr-ghost-btn{ display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border:0; cursor:pointer; background:transparent; border-radius:6px; font:inherit; font-size:11.5px; font-weight:500; color:var(--accent); transition:background .15s; }
 .ldr-ghost-btn:hover{ background:var(--accent-tint) }
 .ldr-ghost-btn:disabled{ color:var(--muted); cursor:default; }
+/* Inside a glow border the button can no longer be transparent — the gradient
+   would fill it rather than outline it. --nav is the drawer's own ground, so
+   it still reads as a ghost button, now with the saver's ring. */
+.ldr-ghost-btn.glow{ background:var(--nav); }
+.ldr-ghost-btn.glow:hover{ background:var(--accent-tint) }
 .ldr-summary{ position:relative; padding:16px 18px; background:linear-gradient(180deg, var(--accent-tint) 0%, var(--surface) 100%); border:1px solid color-mix(in oklab, var(--accent) 18%, var(--line)); border-radius:14px; font-size:14px; line-height:1.6; color:var(--ink-2); letter-spacing:-0.005em; box-shadow:0 1px 0 rgba(255,255,255,.4) inset; }
 .ldr-summary::before{ content:""; position:absolute; left:0; top:14px; bottom:14px; width:2px; background:var(--accent); border-radius:2px; opacity:.5; }
 .ldr-insights{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }

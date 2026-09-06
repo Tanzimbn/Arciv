@@ -528,11 +528,12 @@ export default function LinksView({ onLogout, onNavigate }) {
         onLogout={onLogout}
         dark={dark}
         onToggleDark={() => setDark(d => !d)}
-        /* The dashboard is the only route that can save, so it is the only one
-           that supplies the field. The error hangs off the bar rather than the
-           page: it is about the URL just typed, and the field is now in the
-           nav. */
-        saver={
+        /* Desktop keeps the field in the bar; the phone cannot spare the width,
+           so there it moves into the page and the bar shows its "Save" CTA
+           instead — the same button the other routes use, focusing the field
+           rather than navigating. The error hangs off the bar rather than
+           displacing it, so a 409 does not shove the page down. */
+        saver={isMobile ? null : (
           <div style={{ position: "relative" }}>
             <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
             {saveError && (
@@ -542,11 +543,22 @@ export default function LinksView({ onLogout, onNavigate }) {
               }}>{saveError}</span>
             )}
           </div>
-        }
+        )}
       />
 
       {/* ── Page ── */}
       <main className="arciv-page-pad" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 28px 80px" }}>
+
+        {/* Phone only — see the note on `saver` above. It leads the page because
+            saving is the dashboard's primary action. */}
+        {isMobile && (
+          <div style={{ marginBottom: 20 }}>
+            <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
+            {saveError && (
+              <span style={{ display: "block", fontSize: 12, color: "var(--read)", marginTop: 6 }}>{saveError}</span>
+            )}
+          </div>
+        )}
 
         {/* BYOK nudge — only when AI is unavailable (no personal + no shared key) */}
         {needsByok && !byokDismissed && (

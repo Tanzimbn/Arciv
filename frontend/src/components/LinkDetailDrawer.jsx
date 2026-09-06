@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, errMessage } from "../api/client.js";
+import { useScrollLock } from "../hooks/useScrollLock.js";
 
 // ── Constants ─────────────────────────────────────────────────
 const QUEUE_OPTIONS = [
@@ -150,6 +151,9 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
       .finally(() => { if (!cancelled) setRelatedLoading(false); });
     return () => { cancelled = true; };
   }, [link]);
+
+  // The page behind must not scroll under the drawer.
+  useScrollLock(open);
 
   // Esc to close
   useEffect(() => {
@@ -341,8 +345,11 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 Key insights
               </div>
+              {/* Same rotating ring as the URL saver — the two are the app's
+                  "this calls the AI" affordances, so they read as a pair. */}
+              <span className="arciv-glow-border" style={{ "--glow-r": "6px", display: "inline-flex" }}>
               <button
-                className="ldr-ghost-btn"
+                className="ldr-ghost-btn glow"
                 onClick={handleGenerateInsights}
                 disabled={insightsStatus === "loading"}
               >
@@ -355,6 +362,7 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
                   </>
                 ) : data.ai_insights?.length ? "Regenerate" : "Generate"}
               </button>
+              </span>
             </div>
 
             {typeof insightsStatus === "string" && insightsStatus !== "idle" && insightsStatus !== "loading" && (

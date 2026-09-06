@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import NotificationBell from "./NotificationBell.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
@@ -31,7 +31,7 @@ const PlusIcon = () => (
  *  wanting the field focused; the flag survives the navigation, a ref cannot. */
 export const FOCUS_URL_FLAG = "arciv_focus_url";
 
-function NavLink({ label, active, onClick }) {
+function NavLink({ label, active, onClick, touch }) {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -41,7 +41,11 @@ function NavLink({ label, active, onClick }) {
       onMouseLeave={() => setHov(false)}
       style={{
         border: 0, background: "transparent", cursor: "pointer",
-        padding: "6px 2px", fontSize: 13.5,
+        /* A pointer can hit a 12px-tall label; a thumb cannot. On touch the
+           padding grows the hit area to ~44px without changing the type. */
+        padding: touch ? "13px 14px" : "6px 2px",
+        minHeight: touch ? 44 : undefined,
+        fontSize: 13.5,
         fontWeight: active ? 600 : 500,
         color: active ? "var(--ink)" : hov ? "var(--ink-2)" : "var(--muted)",
         letterSpacing: "-0.005em", whiteSpace: "nowrap",
@@ -53,7 +57,8 @@ function NavLink({ label, active, onClick }) {
       {/* The active route needs marking — the reference bar can rely on the
           page itself for that, an app cannot. */}
       <span style={{
-        position: "absolute", left: 2, right: 2, bottom: 1, height: 2, borderRadius: 2,
+        position: "absolute", left: touch ? 14 : 2, right: touch ? 14 : 2,
+        bottom: touch ? 7 : 1, height: 2, borderRadius: 2,
         background: "var(--accent)", opacity: active ? 1 : 0,
         transition: "opacity .12s",
       }} />
@@ -61,7 +66,7 @@ function NavLink({ label, active, onClick }) {
   );
 }
 
-function IconBtn({ onClick, title, children }) {
+function IconBtn({ onClick, title, children, touch }) {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -70,7 +75,7 @@ function IconBtn({ onClick, title, children }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        width: 32, height: 32, display: "grid", placeItems: "center",
+        width: touch ? 40 : 32, height: touch ? 40 : 32, display: "grid", placeItems: "center",
         border: 0, borderRadius: 9, cursor: "pointer", flexShrink: 0,
         background: hov ? "var(--accent-tint)" : "transparent",
         color: hov ? "var(--accent)" : "var(--ink-2)",
@@ -102,20 +107,92 @@ function IconBtn({ onClick, title, children }) {
  * `onNavigate` is App's router, so these are real path changes: the URL, the
  * back button and a bookmark all agree with what's on screen.
  */
+/** Below this the field is too narrow to read a URL in, so it takes its own row. */
+const SAVER_MIN = 260;
+/** Re-stacking on the exact pixel it unstacked flickers; cross back 24px later. */
+const SAVER_HYSTERESIS = 24;
+
 export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onToggleDark, saver }) {
   const { isMobile } = useBreakpoint();
+  const rowRef = useRef(null);
+  const brandRef = useRef(null);
+  const linksRef = useRef(null);
+  const iconsRef = useRef(null);
+  const ctaRef = useRef(null);
+  const [stacked, setStacked] = useState(false);
+  const [linksOwnRow, setLinksOwnRow] = useState(false);
+
+  const gap = isMobile ? 8 : 22;
+
+  /* Whether the field fits is a question about the row's own content — the
+     brand, three route labels and the icon cluster — not about the viewport, so
+     a media query is the wrong instrument: the labels change width with font
+     and language, and the icon count changes with `onLogout`. Measure the three
+     fixed blocks and stack when what is left cannot hold a readable field. */
+  const measure = useCallback(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const brand = brandRef.current?.offsetWidth ?? 0;
+    const routes = linksRef.current?.offsetWidth ?? 0;
+    const icons = iconsRef.current?.offsetWidth ?? 0;
+
+    /* Mobile does not carry the field at all — the page owns it there — so the
+       only question left is the routes, and on a phone they always get their
+       own row: brand + three labels + three 40px targets cannot share 355px. */
+    if (isMobile) {
+      setStacked(false);
+      setLinksOwnRow(true);
+      return;
+    }
+    if (saver) {
+      const free = row.clientWidth - brand - routes - icons - gap * 3;
+      setStacked(prev => (prev ? free < SAVER_MIN + SAVER_HYSTERESIS : free < SAVER_MIN));
+      setLinksOwnRow(false);
+      return;
+    }
+    /* The routes without a field have the CTA in that slot instead, and a
+       button cannot wrap. So here it is the routes that take the second row —
+       which is what a narrow screen did before any of this was measured. */
+    const need = brand + routes + icons + (ctaRef.current?.offsetWidth ?? 0) + gap * 3;
+    setStacked(false);
+    setLinksOwnRow(prev =>
+      prev ? need > row.clientWidth - SAVER_HYSTERESIS : need > row.clientWidth,
+    );
+  }, [gap, saver, isMobile]);
+
+  useLayoutEffect(() => {
+    measure();
+    const row = rowRef.current;
+    if (!row || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [measure]);
 
   const links = (
-    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 16 : 20 }}>
-      <NavLink label="Library" active={active === "library"} onClick={() => onNavigate("/")} />
-      <NavLink label="Feeds" active={active === "feeds"} onClick={() => onNavigate("/feeds")} />
-      <NavLink label="Settings" active={active === "settings"} onClick={() => onNavigate("/settings")} />
+    <div
+      ref={linksRef}
+      style={{
+        display: "flex", alignItems: "center", flexShrink: 0,
+        /* On its own row the three routes spread across the full width — equal
+           thumb-sized targets rather than a cluster floating in the middle. */
+        gap: isMobile ? 0 : 20,
+        width: isMobile ? "100%" : undefined,
+        justifyContent: isMobile ? "space-around" : undefined,
+      }}
+    >
+      <NavLink label="Library" active={active === "library"} onClick={() => onNavigate("/")} touch={isMobile} />
+      <NavLink label="Feeds" active={active === "feeds"} onClick={() => onNavigate("/feeds")} touch={isMobile} />
+      <NavLink label="Settings" active={active === "settings"} onClick={() => onNavigate("/settings")} touch={isMobile} />
     </div>
   );
 
   return (
     <div style={{
-      position: "sticky", top: isMobile ? 8 : 12, zIndex: 30,
+      /* Flush with the top edge, not floating below it: the bar hangs from the
+         viewport rather than sitting on the page, so there is no strip of
+         background above it to scroll content through. */
+      position: "sticky", top: 0, zIndex: 30,
       padding: isMobile ? "0 10px" : "0 16px",
       display: "flex", justifyContent: "center",
     }}>
@@ -126,12 +203,19 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
         background: "color-mix(in oklab, var(--nav) 86%, transparent)",
         backdropFilter: "blur(24px) saturate(170%)",
         WebkitBackdropFilter: "blur(24px) saturate(170%)",
+        /* Only the bottom corners round, and the top border is dropped — both
+           edges are off-screen, and rounding them would leave two slivers of
+           page showing above the bar. */
         border: "1px solid var(--line)",
-        borderRadius: 16,
+        borderTop: 0,
+        borderRadius: "0 0 16px 16px",
         boxShadow: "0 4px 24px rgba(0,0,0,.07)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 22 }}>
+        {/* Brand, routes and icons hold this row at every width; only the
+            field ever leaves it. */}
+        <div ref={rowRef} style={{ display: "flex", alignItems: "center", gap }}>
           <button
+            ref={brandRef}
             onClick={() => onNavigate("/")}
             title="Library"
             style={{ border: 0, background: "transparent", padding: 0, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }}
@@ -141,23 +225,24 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
             </span>
           </button>
 
-          {!isMobile && links}
-          {!isMobile && saver && (
-            <div style={{ flex: 1, minWidth: 260 }}>{saver}</div>
+          {!linksOwnRow && links}
+          {saver && !stacked && (
+            <div style={{ flex: 1, minWidth: SAVER_MIN }}>{saver}</div>
           )}
-          {(isMobile || !saver) && <div style={{ flex: 1 }} />}
+          {(!saver || stacked) && <div style={{ flex: 1 }} />}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <div ref={iconsRef} style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
             <NotificationBell />
-            <IconBtn onClick={onToggleDark} title={dark ? "Light mode" : "Dark mode"}>
+            <IconBtn onClick={onToggleDark} title={dark ? "Light mode" : "Dark mode"} touch={isMobile}>
               {dark ? <SunIcon /> : <MoonIcon />}
             </IconBtn>
             {onLogout && (
-              <IconBtn onClick={onLogout} title="Log out"><LogoutIcon /></IconBtn>
+              <IconBtn onClick={onLogout} title="Log out" touch={isMobile}><LogoutIcon /></IconBtn>
             )}
           </div>
 
           {!saver && <button
+            ref={ctaRef}
             onClick={onSave}
             style={{
               display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0,
@@ -177,14 +262,14 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
           </button>}
         </div>
 
-        {/* Narrow screens give the field its own full-width row — squeezed in
-            beside the brand and icons there is no room to read a URL. */}
-        {isMobile && saver && <div>{saver}</div>}
+        {/* When the row cannot hold it, the field drops to a full-width row of
+            its own rather than shrinking to a slot too narrow to read. */}
+        {saver && stacked && <div>{saver}</div>}
 
-        {/* Narrow screens put the routes on their own row rather than dropping
-            them, so Feeds and Settings stay one tap away. */}
-        {isMobile && (
-          <div style={{ display: "flex", justifyContent: "center" }}>{links}</div>
+        {/* Routes stay one tap away rather than being dropped when they cannot
+            share the row with the CTA. */}
+        {linksOwnRow && (
+          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>{links}</div>
         )}
       </header>
     </div>

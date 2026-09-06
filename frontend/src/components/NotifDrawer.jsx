@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, errMessage } from "../api/client.js";
+import { useScrollLock } from "../hooks/useScrollLock.js";
 
 const KIND_META = {
   new_feed_items: { bg: "var(--try-tint)",   fg: "var(--try)",   label: "Feed update" },
@@ -134,6 +135,9 @@ export default function NotifDrawer({ notif, onClose }) {
     const t = setTimeout(() => setData(null), 360);
     return () => clearTimeout(t);
   }, [notif]);
+
+  // Same as the link drawer: the page behind must not scroll.
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
