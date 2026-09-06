@@ -215,7 +215,7 @@ export default function AiConnection({ settings, onSettings }) {
               background: "color-mix(in oklab, var(--good) 16%, transparent)", color: "var(--good)",
             }}>● Connected</span>
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: 12.5, color: "var(--muted)", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--muted)", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis" }}>
             {settings.ai_api_key_masked}
           </div>
         </div>
@@ -301,7 +301,7 @@ export default function AiConnection({ settings, onSettings }) {
           <span style={{ color: "var(--warn)", fontSize: 13, lineHeight: 1.5 }}>▲</span>
           <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
             Connecting a new key replaces{" "}
-            <strong style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--ink)" }}>
+            <strong style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--ink)" }}>
               {settings.ai_api_key_masked}
             </strong>. The current key stays active until the new one is verified.
           </div>
@@ -360,7 +360,7 @@ export default function AiConnection({ settings, onSettings }) {
             style={{
               width: "100%", height: 48, borderRadius: 11,
               padding: "0 78px 0 15px",
-              fontSize: 13.5, fontFamily: "monospace",
+              fontSize: 13.5, fontFamily: "var(--font-mono)",
               border: `1.5px solid ${focused ? "var(--accent)" : "var(--line)"}`,
               color: "var(--ink)", background: "var(--surface-2)",
               outline: "none", boxSizing: "border-box",

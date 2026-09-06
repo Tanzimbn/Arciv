@@ -140,6 +140,137 @@ async def test_query_vector_is_cached_in_redis(client, app_state, make_user, mon
 
 
 # --------------------------------------------------------------------------- #
+# Filtered search — the filters must narrow the candidate set BEFORE ranking
+# --------------------------------------------------------------------------- #
+async def _set(link_id, **fields):
+    from sqlalchemy import update
+
+    from api.database import AsyncSessionLocal
+    from api.models.link import Link
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(update(Link).where(Link.id == link_id).values(**fields))
+        await db.commit()
+
+
+async def test_search_applies_the_tag_filter(client, app_state, make_user, stub_embeddings):
+    _, alice = await make_user()
+    a = await _save_and_embed(client, alice, "https://example.com/a", "async runtimes")
+    b = await _save_and_embed(client, alice, "https://example.com/b", "async runtimes")
+    await _set(a, ai_tags=["Rust"])
+    await _set(b, ai_tags=["Zig"])
+
+    r = await client.get(
+        "/api/links/search", params={"q": "async runtimes", "tag": "rust"}, headers=alice
+    )
+    assert r.status_code == 200, r.text
+    assert [x["canonical_url"] for x in r.json()] == ["https://example.com/a"]
+
+
+async def test_search_filters_before_ranking(client, app_state, make_user, stub_embeddings):
+    """The trap this guards: rank first, then drop non-matching rows from the
+    page, and "top 3 matches of which 1 is tagged rust" becomes a 1-result search
+    that hides the rest of the library's rust links entirely.
+    """
+    _, alice = await make_user()
+    # Three closer matches, none tagged rust, plus one weaker match that is.
+    for i in range(3):
+        near = await _save_and_embed(
+            client, alice, f"https://example.com/near{i}", "async runtimes"
+        )
+        await _set(near, ai_tags=["Zig"])
+    far = await _save_and_embed(client, alice, "https://example.com/far", "sourdough baking")
+    await _set(far, ai_tags=["Rust"])
+
+    # limit=3 is smaller than the number of better-ranked non-matching rows, so a
+    # filter applied after ranking would return nothing at all.
+    r = await client.get(
+        "/api/links/search",
+        params={"q": "async runtimes", "tag": "rust", "limit": 3},
+        headers=alice,
+    )
+    assert [x["canonical_url"] for x in r.json()] == ["https://example.com/far"]
+
+
+async def test_search_applies_content_type_and_domain_filters(
+    client, app_state, make_user, stub_embeddings
+):
+    _, alice = await make_user()
+    a = await _save_and_embed(client, alice, "https://github.com/x/y", "build tooling")
+    b = await _save_and_embed(client, alice, "https://example.com/z", "build tooling")
+    await _set(a, content_type="tool")
+    await _set(b, content_type="article")
+
+    r = await client.get(
+        "/api/links/search", params={"q": "build tooling", "domain": "github.com"},
+        headers=alice,
+    )
+    assert [x["canonical_url"] for x in r.json()] == ["https://github.com/x/y"]
+
+    r = await client.get(
+        "/api/links/search", params={"q": "build tooling", "content_type": "article"},
+        headers=alice,
+    )
+    assert [x["canonical_url"] for x in r.json()] == ["https://example.com/z"]
+
+
+async def test_search_filters_and_together(client, app_state, make_user, stub_embeddings):
+    _, alice = await make_user()
+    hit = await _save_and_embed(client, alice, "https://github.com/hit", "vector search")
+    await _set(hit, ai_tags=["Vector Search"], content_type="tool")
+    # Same tag, same domain, same text — only content_type differs, so this row
+    # is only excluded if every filter is ANDed rather than the last one winning.
+    await _set(
+        await _save_and_embed(client, alice, "https://github.com/miss", "vector search"),
+        ai_tags=["Vector Search"],
+        content_type="article",
+    )
+
+    r = await client.get(
+        "/api/links/search",
+        params={
+            "q": "vector search",
+            "tag": "vector-search",
+            "domain": "github.com",
+            "content_type": "tool",
+        },
+        headers=alice,
+    )
+    assert [x["canonical_url"] for x in r.json()] == ["https://github.com/hit"]
+
+
+async def test_search_with_an_unmatchable_filter_returns_empty_not_everything(
+    client, app_state, make_user, stub_embeddings
+):
+    """A tag that normalises to empty, or a malformed domain, must not silently
+    drop the filter — that would look like a wildly wrong match set."""
+    _, alice = await make_user()
+    await _save_and_embed(client, alice, "https://example.com/a", "async runtimes")
+
+    for params in (
+        {"q": "async runtimes", "tag": "___"},
+        {"q": "async runtimes", "domain": "not a host"},
+    ):
+        r = await client.get("/api/links/search", params=params, headers=alice)
+        assert r.status_code == 200, r.text
+        assert r.json() == [], params
+
+
+async def test_filtered_search_stays_user_scoped(
+    client, app_state, make_user, stub_embeddings
+):
+    _, alice = await make_user("alice@example.com")
+    _, bob = await make_user("bob@example.com")
+    a = await _save_and_embed(client, alice, "https://example.com/alice", "async runtimes")
+    await _set(a, ai_tags=["Rust"])
+
+    r = await client.get(
+        "/api/links/search", params={"q": "async runtimes", "tag": "rust"}, headers=bob
+    )
+    assert r.json() == []
+
+
+# --------------------------------------------------------------------------- #
 # Related links
 # --------------------------------------------------------------------------- #
 async def test_similar_excludes_the_source_and_scopes_to_the_user(
@@ -191,3 +322,35 @@ async def test_similar_excludes_archived_links(client, app_state, make_user, stu
 
     await client.patch(f"/api/links/{other}", json={"status": "done"}, headers=alice)
     assert (await client.get(f"/api/links/{source}/similar", headers=alice)).json() == []
+
+
+async def test_search_combines_several_tags_under_either_logic(
+    client, app_state, make_user, stub_embeddings
+):
+    """Search and browse share one filter helper, so the Any/All switch has to
+    mean the same thing with a query in the box as without one."""
+    _, alice = await make_user()
+    rust = await _save_and_embed(client, alice, "https://example.com/rust", "async runtimes")
+    llm = await _save_and_embed(client, alice, "https://example.com/llm", "async runtimes")
+    both = await _save_and_embed(client, alice, "https://example.com/both", "async runtimes")
+    await _set(rust, ai_tags=["Rust"])
+    await _set(llm, ai_tags=["LLM"])
+    await _set(both, ai_tags=["rust", "llm"])
+
+    async def _urls(**params):
+        r = await client.get(
+            "/api/links/search",
+            params={"q": "async runtimes", "limit": 100, **params},
+            headers=alice,
+        )
+        assert r.status_code == 200, r.text
+        return sorted(x["canonical_url"] for x in r.json())
+
+    assert await _urls(tag=["rust", "llm"], tag_logic="any") == [
+        "https://example.com/both",
+        "https://example.com/llm",
+        "https://example.com/rust",
+    ]
+    assert await _urls(tag=["rust", "llm"], tag_logic="all") == [
+        "https://example.com/both"
+    ]

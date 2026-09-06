@@ -132,7 +132,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
           borderRadius: 99, padding: "3px 8px 3px 4px",
         }}>
           <FaviconOrLetter url={link.favicon_url} favColor={favColor} letter={letter} />
-          <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--ink-2)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--ink-2)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
             {domain}
           </span>
         </div>
@@ -178,7 +178,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         </div>
 
         {/* Date */}
-        <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace", flexShrink: 0 }}>{savedDate}</span>
+        <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{savedDate}</span>
 
         {/* AI badge */}
         {link.ai_status === "done" && (
@@ -254,7 +254,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
             borderRadius: 99, padding: "3px 8px 3px 4px", minWidth: 0, flexShrink: 0,
           }}>
             <FaviconOrLetter url={link.favicon_url} favColor={favColor} letter={letter} />
-            <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--ink-2)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: "var(--ink-2)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
               {domain}
             </span>
           </div>
@@ -340,7 +340,7 @@ export default function LinkCard({ link, layout = "grid", onDone, onDelete, onRe
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace" }}>{savedDate}</span>
+            <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{savedDate}</span>
             {link.ai_status === "done" && (
               <span style={{ fontSize: 10.5, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 99, padding: "1px 7px", display: "flex", alignItems: "center", gap: 3, fontWeight: 500 }}>✦ AI</span>
             )}

@@ -1,3 +1,19 @@
+# Source dirs only — deliberately NOT `.:/app`. A bind mount of the repo root
+# shadows the whole image dir, including the React bundle stage 1 of the
+# Dockerfile built into /app/frontend/dist. `frontend/dist` is gitignored, so on
+# a fresh clone the host has no dist to shadow it with, `FRONTEND_DIST.is_dir()`
+# in api/main.py is False, the SPA route is never registered, and
+# http://localhost:8000 answers 404 with the API otherwise healthy. Listing the
+# Python packages keeps uvicorn --reload working without touching frontend/.
+x-app-src: &app-src
+  - ./api:/app/api
+  - ./agent:/app/agent
+  - ./worker:/app/worker
+  - ./bot:/app/bot
+  - ./db:/app/db
+  - ./tests:/app/tests
+  - ./alembic.ini:/app/alembic.ini
+
 services:
   db:
     # pgvector image = Postgres 16 + the `vector` extension (for embeddings /
@@ -62,8 +78,7 @@ services:
       EMBED_SERVICE_URL: http://embed:8001
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
+    volumes: *app-src
     depends_on:
       db:
         condition: service_healthy
@@ -80,8 +95,7 @@ services:
     env_file: .env
     environment:
       EMBED_SERVICE_URL: http://embed:8001
-    volumes:
-      - .:/app
+    volumes: *app-src
     depends_on:
       db:
         condition: service_healthy
@@ -90,20 +104,6 @@ services:
       embed:
         condition: service_started
     command: python -m arq worker.worker.WorkerSettings
-
-  # Telegram bot — disabled by default. Enable with TELEGRAM_ENABLED=true in .env
-  # and run: docker compose --profile telegram up
-  bot:
-    profiles: ["telegram"]
-    build: .
-    env_file: .env
-    volumes:
-      - .:/app
-    depends_on:
-      api:
-        condition: service_started
-    command: python -c "import sys; sys.path.insert(0, '/app'); exec(open('bot/main.py').read())"
-    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Arciv** is a self-hostable intelligent link and feed manager. Users save URLs manually or via RSS feeds; an AI pipeline classifies, summarises, and routes them into smart queues. All five MVP phases are scaffolded end-to-end (foundation, link saving, AI pipeline, feed tracker, notifications + Telegram bot). Code lives at project root; docs in `docs/`.
+**Arciv** is a self-hostable intelligent link and feed manager. Users save URLs manually or via RSS feeds; an AI pipeline classifies, summarises, and routes them into smart queues. All five MVP phases are scaffolded end-to-end (foundation, link saving, AI pipeline, feed tracker, notifications). Code lives at project root; docs in `docs/`.
 
 Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the full spec (`docs/requirements-full.md`).
 
@@ -22,7 +22,6 @@ Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the 
 | HTTP/scraping | `httpx` + `beautifulsoup4` |
 | Frontend | React + Vite + TailwindCSS (SPA) |
 | Auth | JWT (`python-jose`) + bcrypt |
-| Telegram bot | `python-telegram-bot` |
 | DB migrations | Alembic |
 | Containerisation | Docker + Docker Compose |
 
@@ -31,9 +30,9 @@ Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the 
 ```
 arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 ├── api/                        # FastAPI application
-│   ├── routers/                # auth, links, feeds, notifications, settings, telegram
+│   ├── routers/                # auth, links, feeds, notifications, settings
 │   ├── models/                 # user, link, feed, notification, job
-│   ├── schemas/                # auth, link, feed, notification, settings, telegram
+│   ├── schemas/                # auth, link, feed, notification, settings
 │   ├── middleware/             # auth.py — JWT get_current_user
 │   ├── utils/                  # security (bcrypt), encryption (AES-256), heuristics,
 │   │                           # metadata fetch, feed_discovery
@@ -49,16 +48,14 @@ arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 ├── worker/                     # ARQ jobs
 │   ├── worker.py               # WorkerSettings — registers functions + cron jobs
 │   ├── ai_classify.py          # classify_link + sweep_failed_links
-│   ├── feed_poll.py            # poll_all_feeds + poll_single_feed
-│   └── daily_digest.py         # send_daily_digest cron
-├── bot/
-│   └── main.py                 # Telegram bot — long-polling, /start linking, URL submit
+│   └── feed_poll.py            # poll_all_feeds + poll_single_feed
 ├── db/
 │   └── migrations/
 │       ├── env.py              # Async Alembic env
 │       └── versions/           # 0001 users+links, 0002 jobs,
 │                               # 0003 feeds+notifications, 0004 telegram fields,
-│                               # 0005 timestamptz, 0006 feed_category
+│                               # 0005 timestamptz, 0006 feed_category,
+│                               # … 0015 ollama_cloud, 0016 drop_telegram
 ├── frontend/                   # React + Vite + Tailwind SPA
 │   └── src/
 │       ├── views/              # LoginView, LinksView, FeedsView, SettingsView
@@ -66,7 +63,7 @@ arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 │       │                       # SubpageNav
 │       └── api/client.js
 ├── alembic.ini
-├── docker-compose.yml          # db, redis, api, worker, bot
+├── docker-compose.yml          # db, redis, api, worker, embed, mailhog
 ├── Dockerfile
 ├── requirements.txt
 ├── .env.example
@@ -155,6 +152,51 @@ not reading.
 
 **All data scoped by `user_id`.** Every DB query must include a `user_id` filter. No cross-user access is possible.
 
+**Topics are derived on read; the tag normaliser has an exact SQL twin.**
+`api/utils/tags.py` holds `normalise_tag` (Python) and `tag_key_sql` (SQL) —
+lowercase, whitespace and `_` to `-`, runs collapsed, edges trimmed. One groups
+(`GET /api/topics` unnests `ai_tags` through a LATERAL join and `GROUP BY`s the
+key), the other resolves `?tag=` on `GET /api/links` and `/links/search`. They
+must stay twins: a divergence means a topic chip that says 7 opens a list of 4.
+The same agreement is why narrowing lives in one module: `api/utils/link_query.py`
+holds `apply_queue_scope` and `apply_link_filters`, and **both** the topic list
+and the link list call them. `GET /api/topics?queue=` is what makes the panel
+describe the active tab — on Try Later it lists Try Later's topics with Try
+Later's counts, and a topic with no links in that tab drops off rather than
+offering a click that returns nothing. `queue="archive"` reads *status*, not
+queue, in both places. Duplicating that if/elif into the topics router instead
+would reintroduce exactly the drift this design exists to prevent.
+Character classes are written longhand (`[ \t\n\r\f\v_]+`, never `\s`) because
+Python's `\s` is unicode-aware while Postgres' is locale-dependent, and
+`tests/integration/test_topics.py` asserts the pair agrees inside real Postgres
+on tags containing a literal tab and newline. Normalisation never happens on
+**write** — stored tags keep the model's or the user's chosen casing, since
+rewriting them would overwrite a deliberate hand edit in the drawer and need an
+irreversible backfill. `agent/prompt.py` asks for already-normalised tags to
+reduce divergence at source instead. There is **no GIN index** on `ai_tags`: the
+predicate is over a normalised *element*, which an index on raw values cannot
+answer; the scan is bounded by `MAX_LINKS_PER_USER` and narrowed by
+`idx_links_user_queue`. A tag that normalises to `""` or a malformed `?domain=`
+returns an **empty list**, never the unfiltered library — silently dropping a
+filter looks like a match; with several tags, one unusable key fails the whole
+request under `any` too, since the extra rows would read as real matches.
+**`?tag=` is repeatable** (capped at 10 keys — each is its own `EXISTS` over the
+row's unnested tags) and `?tag_logic=any|all` picks union or intersection.
+Neither logic contains the other — "anything about rust or LLMs" and "the link
+about both" are different questions — so `components/TopicsFilter.jsx` exposes
+the switch instead of assuming one, and repeated spellings of one key
+(`?tag=Rust&tag=rust`) collapse to a single key rather than AND-ing a key with
+itself. The client must send arrays as repeated params (`api/client.js:qs`): a
+plain `URLSearchParams` stringifies `["a","b"]` to `a,b`, which the server reads
+as one topic named `a,b` and matches nothing. `GET /api/links/search` applies filters **before**
+`ORDER BY cosine_distance`: ranking first and filtering the page after turns
+"top 30 matches, 3 tagged rust" into a 3-result search. The `content_type`,
+`domain`, `since` and `until` params have **no UI surface** — the Topics panel
+(plus the queue tabs and the search box it shares a card with) is the only
+discovery control in `LinksView`. They stay because they are the shared
+plumbing `?tag=` and the filter-before-rank search path are built on, and they
+are covered by tests; don't delete them as dead code.
+
 **API keys encrypted at rest.** `ai_api_key_enc` in the DB uses AES-256 (`api/utils/encryption.py`). Keys are never returned in API responses — only a masked version (`sk-1...cdef` — first 4 and last 4; the tail is the part that identifies *which* key it is, since every key from a provider shares its prefix, and keys under 16 chars get no tail at all). One key per account, not one per provider: `ai_api_key_enc` is a single column used with whatever `ai_provider` is set to, so the stored key belongs to the saved provider and Settings must not present it under another one. There is exactly one such column and no per-provider special case: all five providers, Ollama included, store an opaque secret there and get the same mask. (Ollama used to be the exception — a base URL plus a second `ai_auth_token_enc` column for the proxy guarding the user's own server — and that whole shape is gone; see the Ollama Cloud principle below.)
 
 **User-supplied URLs are fetched only via `api/utils/safe_fetch.py`.** `safe_request` / `safe_stream` resolve the host, reject it if any address is private/loopback/link-local/reserved/CGNAT, and pin the connection to the validated address (`Host` header + TLS SNI keep the real hostname), revalidating every redirect hop. They return `(response, logical_url)` — use `logical_url`, never `response.url` (which is the pinned IP), or canonicalisation and `UNIQUE (user_id, canonical_url)` dedup break silently. Never add a bare `httpx` call on a user URL; `tests/test_ssrf_guard.py::test_no_module_fetches_a_user_url_outside_safe_fetch` scans for it. Operator-configured clients (mailer, Turnstile, embed service) take no user input and stay outside this. **`agent/providers/ollama.py` stays inside anyway**, and stays on the drift-scan watch list, for a different reason: its URL is now the constant `https://ollama.com`, so this is no longer SSRF, but every one of its four requests (`/api/chat` ×2, `/api/tags`, `/api/ps`) carries the user's bearer key. `_fetch_chain` follows redirects itself, so it also reimplements httpx's cross-origin credential strip: `Authorization`/`Cookie`/`Proxy-Authorization` are dropped when a hop changes `(scheme, host, port)` — without it a `302` off ollama.com would hand a user's API key to a third party. `safe_request` accepts a `json` body for this; a 301/302/303 hop drops the body and switches to GET, per RFC. `ALLOW_PRIVATE_NETWORK_FETCH=true` reopens private targets for LAN self-hosters saving links off their own network — it must stay `false` on anything public.
@@ -171,20 +213,22 @@ Each phase is wired up; ongoing work is hardening, edge cases, and polish.
 2. **Link saving** — `POST /api/links` (metadata fetch via `api/utils/metadata.py`, URL canonicalisation, dedup at DB level), list/patch/delete, retry-ai. Frontend `LinksView` with `QueueTabs` + `UrlInputBar` + `LinkCard`.
 3. **AI pipeline** — ARQ queue (`worker/worker.py`), five providers behind one interface, classify+summarise in a single LLM call, exponential backoff (2 min → 10 min → 1 hour → `failed`), hourly `sweep_failed_links` cron. Settings page (`/api/settings`, `/api/settings/ai/test`).
 4. **Feed tracker** — `feeds` + `feed_items` tables, RSS auto-discovery (`api/utils/feed_discovery.py`), daily cron poll driven by `FEED_POLL_CRON`, failure handling with consecutive-failure tracking. Feeds support an optional `category` field (String, nullable) for user-defined grouping — exposed in `FeedCreate`, `FeedUpdate`, `FeedResponse` schemas and `PATCH /api/feeds/:id`. **Feeds are notification-only, not auto-ingest** (deliberate deviation from `requirements-mvp.md:220`): subscribing seeds existing GUIDs into `feed_items` with `link_id=NULL` but creates no `Link` rows; the daily poll likewise records new GUIDs and emits a single grouped notification (title + URL per new post in `Notification.body`) without saving anything. The user manually saves any post they want via the existing `POST /api/links` flow. Do not reintroduce auto-Link creation from feeds.
-5. **Notifications + Telegram** — in-app notification bell, Telegram bot (`bot/main.py`) — token-based account linking, URL submission via DM, `send_daily_digest` cron at 09:00 UTC. **Telegram is currently disabled** by default: `TELEGRAM_ENABLED=false` skips the `/api/telegram/*` router registration in `api/main.py` and the digest cron in `worker/worker.py`, and the `bot` service is behind the `telegram` Compose profile (`docker compose --profile telegram up` to start it).
+5. **Notifications** — in-app notification bell with unread counter, fed by the feed poller and the AI-config alert path.
+
+**Telegram was removed from the product entirely.** It never shipped enabled and no account was ever linked, so the code, config, UI and schema are all gone: `bot/`, `api/routers/telegram.py`, `api/schemas/telegram.py`, `worker/daily_digest.py`, the `TELEGRAM_*` settings, the `bot` Compose service, the Settings panel, and the four `users` columns (dropped in `0016_drop_telegram`). Migrations `0001`/`0004`/`0005` still name those columns — that is immutable history, not a live feature. Do not reintroduce it.
 
 ## Key API Endpoints (MVP)
 
 ```
 POST   /api/auth/register
 POST   /api/auth/login
-POST   /api/auth/telegram/link
 
 POST   /api/links              # Save URL — returns fast, AI is async
-GET    /api/links              # ?queue=&status=&page=&limit=
+GET    /api/links              # ?queue=&status=&tag=(repeatable)&tag_logic=any|all&content_type=&domain=&since=&until=&page=&limit=
 PATCH  /api/links/:id          # Update queue, content_type, tags, status
 DELETE /api/links/:id
 POST   /api/links/:id/retry-ai
+GET    /api/topics             # ?queue=&min_count=&limit= — ai_tags grouped by normalised key, scoped to the tab
 
 POST   /api/feeds/discover     # Returns feed info without subscribing
 POST   /api/feeds
@@ -215,7 +259,7 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 - `DATABASE_URL`, `REDIS_URL`
 - `SECRET_KEY` (JWT), `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`
 - `ENCRYPTION_KEY` (AES-256 for API keys at rest)
-- `TELEGRAM_BOT_TOKEN`, `SHARED_GEMINI_KEY`
+- `SHARED_GEMINI_KEY`
 - `FEED_POLL_CRON` (default `0 8 * * *` — parsed in `worker/worker.py`; only minute and hour fields are honored)
 - `ENVIRONMENT`
 
@@ -228,7 +272,7 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 The suite lives in `tests/`; full setup notes in `tests/README.md`. Two layers:
 
 - **unit** (`tests/test_*.py`) — no services. Encryption + key rotation, storage byte accounting, URL canonicalisation, SSRF guard, heuristics, signup guards, password/JWT primitives.
-- **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search.
+- **integration** (`tests/integration/`, `@pytest.mark.integration`) — the real app over `httpx.ASGITransport` against a real Postgres (pgvector) + Redis. Tenancy isolation, quotas, rate limits, storage deltas, account export/delete, semantic search, topics + link filters.
 
 ```bash
 python3.12 -m venv venv && source venv/bin/activate   # 3.13 has no wheels for asyncpg/pydantic-core at the pinned versions
@@ -237,6 +281,13 @@ ruff check .
 pytest                                    # integration layer skips if services are down
 TEST_DATABASE_URL=… TEST_REDIS_URL=… pytest   # full run
 ```
+
+`Makefile` wraps these: `make venv`, `make test-unit`, `make test` (which brings
+up `docker-compose.test.yml` — throwaway pgvector + Redis on 55432/56379 — first),
+`make lint`. Local setup is `./scripts/bootstrap-env.sh` (`make setup`) then
+`make up`; `.env.example` defaults point SMTP at the bundled MailHog on :8025,
+because login requires a verified email and there is no other way to get the link
+without reading the worker log.
 
 Rules when adding tests:
 

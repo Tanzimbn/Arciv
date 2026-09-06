@@ -10,30 +10,30 @@ import SubpageNav from "../components/SubpageNav.jsx";
 const ADMIN_CSS = `
 .adm { max-width: 1120px; margin: 0 auto; padding: 24px 28px 96px; }
 .adm .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-top: 22px; margin: 6px 0 20px; border-top: 1px solid var(--line); }
-.adm .eyebrow { display: inline-flex; align-items: center; gap: 9px; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 10px; }
+.adm .eyebrow { display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 10px; }
 .adm .eyebrow .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--try); animation: adm-pulse 2.4s ease-in-out infinite; }
 @keyframes adm-pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--try) 50%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
-.adm h1.title { margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 52px; line-height: .98; letter-spacing: -0.015em; color: var(--ink); }
+.adm h1.title { margin: 0; font-family: var(--font-serif); font-weight: 400; font-size: 46px; line-height: 1.04; letter-spacing: -0.02em; color: var(--ink); }
 .adm .title em { font-style: italic; color: var(--accent); }
-.adm .head-meta { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.5; font-family: ui-monospace, monospace; }
+.adm .head-meta { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.5; font-family: var(--font-mono); }
 .adm .head-meta b { color: var(--ink-2); font-weight: 500; }
 .adm .tabs { display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 13px; background: var(--surface); border: 1px solid var(--line); width: fit-content; box-shadow: var(--shadow-card); margin-bottom: 22px; }
 .adm .tab { border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--muted); padding: 8px 16px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; transition: background .12s, color .12s; }
 .adm .tab:hover { color: var(--ink-2); background: var(--surface-2); }
 .adm .tab.on { background: var(--btn-dark); color: var(--btn-dark-text); }
-.adm .tab .cnt { font-family: ui-monospace, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 99px; background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--muted); font-weight: 500; }
-.adm .tab.on .cnt { background: rgba(255,255,255,.16); color: #fff; }
+.adm .tab .cnt { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 99px; background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--muted); font-weight: 500; }
+.adm .tab.on .cnt { background: color-mix(in oklab, var(--btn-dark-text) 16%, transparent); color: var(--btn-dark-text); }
 .adm .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); margin: 0 0 20px; border: 1px solid var(--line); border-radius: var(--r-lg, 16px); background: color-mix(in oklab, var(--surface) 60%, transparent); overflow: hidden; box-shadow: var(--shadow-card); }
 .adm .stat { padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 12px; position: relative; border-right: 1px solid var(--line); transition: background .15s; }
 .adm .stat:last-child { border-right: 0; }
 .adm .stat:hover { background: color-mix(in oklab, var(--surface) 92%, transparent); }
 .adm .stat-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.adm .stat-label { font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.adm .stat-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
 .adm .stat-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
 .adm .stat-ico svg { width: 14px; height: 14px; }
 .adm .stat-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
-.adm .stat-num { font-family: 'Instrument Serif', serif; font-size: 44px; font-weight: 400; letter-spacing: -0.02em; line-height: .9; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; color: var(--ink); }
-.adm .stat-delta { font-size: 11px; font-family: ui-monospace, monospace; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; padding-bottom: 3px; }
+.adm .stat-num { font-family: var(--font-serif); font-size: 40px; font-weight: 400; letter-spacing: -0.02em; line-height: .9; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; color: var(--ink); }
+.adm .stat-delta { font-size: 11px; font-family: var(--font-mono); color: var(--muted); display: inline-flex; align-items: center; gap: 5px; padding-bottom: 3px; }
 .adm .stat-delta .arrow { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 5px; background: color-mix(in oklab, var(--try) 14%, transparent); color: var(--try); font-size: 10px; }
 .adm .stat-delta.down .arrow { background: color-mix(in oklab, var(--read) 14%, transparent); color: var(--read); }
 .adm .stat-delta.flat .arrow { background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--muted); }
@@ -44,15 +44,15 @@ const ADMIN_CSS = `
 .adm .panel-h { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
 .adm .panel-title { display: flex; flex-direction: column; gap: 3px; }
 .adm .panel-title h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
-.adm .panel-title p { margin: 0; font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.adm .panel-title p { margin: 0; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 .adm .legend { display: flex; align-items: center; gap: 16px; }
 .adm .leg { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-2); font-weight: 500; }
 .adm .leg .sw { width: 9px; height: 9px; border-radius: 3px; }
-.adm .leg .val { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); font-weight: 400; }
+.adm .leg .val { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 400; }
 .adm .chart { position: relative; margin-top: 20px; }
 .adm .chart-grid { position: absolute; inset: 0 0 24px 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
 .adm .chart-grid span { border-top: 1px dashed var(--line-2); position: relative; }
-.adm .chart-grid span b { position: absolute; left: 0; top: -8px; font-family: ui-monospace, monospace; font-size: 9.5px; color: var(--muted-2); background: var(--surface); padding-right: 6px; font-weight: 400; }
+.adm .chart-grid span b { position: absolute; left: 0; top: -8px; font-family: var(--font-mono); font-size: 9.5px; color: var(--muted-2); background: var(--surface); padding-right: 6px; font-weight: 400; }
 .adm .bars { position: relative; display: flex; align-items: flex-end; gap: 0; height: 210px; padding-left: 24px; }
 .adm .col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; position: relative; padding: 0 2px; }
 .adm .col .stack { display: flex; align-items: flex-end; gap: 2px; width: 100%; justify-content: center; height: 100%; }
@@ -61,16 +61,16 @@ const ADMIN_CSS = `
 .adm .bar.b2 { background: linear-gradient(180deg, var(--watch), color-mix(in oklab, var(--watch) 60%, var(--surface))); }
 .adm .bar.b3 { background: linear-gradient(180deg, var(--try), color-mix(in oklab, var(--try) 58%, var(--surface))); }
 .adm .col.today .bar.b1 { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); box-shadow: 0 0 14px -2px color-mix(in oklab, var(--accent) 55%, transparent); }
-.adm .col.today::after { content: 'TODAY'; position: absolute; top: -4px; left: 50%; transform: translate(-50%,-100%); font-family: ui-monospace, monospace; font-size: 8.5px; letter-spacing: 0.1em; color: var(--accent); background: var(--accent-tint); padding: 2px 6px; border-radius: 99px; white-space: nowrap; border: 1px solid color-mix(in oklab, var(--accent) 22%, transparent); }
+.adm .col.today::after { content: 'TODAY'; position: absolute; top: -4px; left: 50%; transform: translate(-50%,-100%); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--accent); background: var(--accent-tint); padding: 2px 6px; border-radius: 99px; white-space: nowrap; border: 1px solid color-mix(in oklab, var(--accent) 22%, transparent); }
 .adm .axis { display: flex; padding-left: 24px; margin-top: 8px; }
-.adm .axis .tk { flex: 1; text-align: center; font-family: ui-monospace, monospace; font-size: 9.5px; color: var(--muted-2); }
+.adm .axis .tk { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 9.5px; color: var(--muted-2); }
 .adm .col:hover .bar { filter: brightness(1.06); }
-.adm .col .tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--ink); color: var(--surface); font-size: 11px; padding: 6px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 5; box-shadow: var(--shadow-pop); font-family: ui-monospace, monospace; }
+.adm .col .tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--ink); color: var(--surface); font-size: 11px; padding: 6px 9px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 5; box-shadow: var(--shadow-pop); font-family: var(--font-mono); }
 .adm .col:hover .tip { opacity: 1; transform: translateX(-50%); }
 .adm .col .tip .r { color: #c3aaff; } .adm .col .tip .u { color: #8db9f5; } .adm .col .tip .s { color: #6fe0ab; }
 .adm .tablewrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg, 16px); overflow: hidden; box-shadow: var(--shadow-card); }
 .adm table { width: 100%; border-collapse: collapse; }
-.adm thead th { text-align: left; font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 13px 20px; border-bottom: 1px solid var(--line); background: color-mix(in oklab, var(--surface-2) 55%, transparent); }
+.adm thead th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 13px 20px; border-bottom: 1px solid var(--line); background: color-mix(in oklab, var(--surface-2) 55%, transparent); }
 .adm tbody td { padding: 14px 20px; border-bottom: 1px solid var(--line-2); font-size: 13.5px; color: var(--ink-2); vertical-align: middle; }
 .adm tbody tr:last-child td { border-bottom: 0; }
 .adm tbody tr { transition: background .12s; }
@@ -78,13 +78,13 @@ const ADMIN_CSS = `
 .adm .u-cell { display: flex; align-items: center; gap: 11px; }
 .adm .u-av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; box-shadow: 0 1px 2px rgba(22,21,19,.15); }
 .adm .u-name { font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
-.adm .u-mail { font-size: 11.5px; color: var(--muted); font-family: ui-monospace, monospace; }
-.adm .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 99px; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 500; border: 1px solid transparent; }
+.adm .u-mail { font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
+.adm .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 99px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 500; border: 1px solid transparent; }
 .adm .pill.verified { background: var(--try-tint); color: var(--try); border-color: color-mix(in oklab, var(--try) 22%, transparent); }
 .adm .pill.pending { background: color-mix(in oklab, var(--inbox) 12%, transparent); color: var(--inbox); border-color: color-mix(in oklab, var(--inbox) 25%, transparent); }
 .adm .pill.admin { background: var(--accent-tint); color: var(--accent); border-color: color-mix(in oklab, var(--accent) 20%, transparent); }
 .adm .pill.member { background: var(--surface-2); color: var(--muted); border-color: var(--line); }
-.adm .mono { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+.adm .mono { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .adm .row-act { width: 28px; height: 28px; border: 0; background: transparent; border-radius: 7px; cursor: pointer; color: var(--muted-2); display: grid; place-items: center; transition: background .15s, color .15s; }
 .adm .row-act:hover:not(:disabled) { background: var(--read-tint); color: var(--read); }
 .adm .row-act:disabled { opacity: .3; cursor: not-allowed; }
@@ -131,7 +131,7 @@ const dayNum = (iso) => new Date(iso + "T00:00:00").getDate();
 const shortDate = (iso) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-export default function AdminView({ onBack }) {
+export default function AdminView({ onNavigate, onLogout }) {
   const [tab, setTab] = useState("overview");
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState(null);
@@ -155,7 +155,7 @@ export default function AdminView({ onBack }) {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <style>{ADMIN_CSS}</style>
       <div style={{ paddingTop: 12 }}>
-        <SubpageNav onBack={onBack} />
+        <SubpageNav active="admin" onNavigate={onNavigate} onLogout={onLogout} />
       </div>
 
       <div className="adm">

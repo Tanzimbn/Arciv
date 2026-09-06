@@ -26,21 +26,24 @@ pytest                       # integration tests skip with a reason
 Python 3.12, matching the Dockerfile and CI — `asyncpg` and `pydantic-core` have
 no 3.13 wheels at the pinned versions and fall back to a source build.
 
-Full suite. Ports are deliberately non-default so a throwaway stack can't collide
-with your dev `docker compose` stack:
+Full suite — `make test` does all of the below (and `make venv` builds the
+virtualenv above). By hand:
 
 ```bash
-docker run -d --name arciv-test-pg \
-  -e POSTGRES_USER=arciv -e POSTGRES_PASSWORD=arciv -e POSTGRES_DB=arciv_test \
-  -p 55432:5432 pgvector/pgvector:pg16
-docker run -d --name arciv-test-redis -p 56379:6379 redis:7
+docker compose -f docker-compose.test.yml up -d --wait
 
 TEST_DATABASE_URL=postgresql://arciv:arciv@localhost:55432/arciv_test \
 TEST_REDIS_URL=redis://localhost:56379/15 \
 pytest
 ```
 
-Teardown: `docker rm -f arciv-test-pg arciv-test-redis`.
+Ports are deliberately non-default (**55432/56379**) so the throwaway stack can't
+collide with — or truncate — your dev `docker compose` stack on 5432/6379. The
+compose project name is separate too, so `docker compose down` on the dev stack
+leaves these running.
+
+Teardown: `docker compose -f docker-compose.test.yml down -v`
+(`make test-services-down`).
 
 Selecting a layer explicitly:
 

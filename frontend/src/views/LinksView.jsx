@@ -3,8 +3,10 @@ import { api, errMessage } from "../api/client.js";
 import ByokOnboarding from "../components/ByokOnboarding.jsx";
 import LinkCard from "../components/LinkCard.jsx";
 import LinkDetailDrawer from "../components/LinkDetailDrawer.jsx";
-import NotificationBell from "../components/NotificationBell.jsx";
 import QueueTabs from "../components/QueueTabs.jsx";
+import { MAX_TAGS, TopicsFilter } from "../components/TopicsFilter.jsx";
+import TopNav, { FOCUS_URL_FLAG } from "../components/TopNav.jsx";
+import { normaliseTag } from "../api/tags.js";
 import UrlInputBar from "../components/UrlInputBar.jsx";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
@@ -22,67 +24,11 @@ const TAB_LABELS = {
   "try-later": "Try Later", inbox: "Inbox", archive: "Archive",
 };
 
-const SunIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="5"/>
-    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-  </svg>
-);
-
-const MoonIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-  </svg>
-);
-
-const FeedsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 11a9 9 0 019 9"/><path d="M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-  </svg>
-);
-
-const LogoutIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-  </svg>
-);
-
 const SearchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 );
-
-function NavIconBtn({ onClick, title, children, hoverBg, hoverColor }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: 34, height: 34, display: "grid", placeItems: "center",
-        border: 0, borderRadius: 8, cursor: "pointer",
-        background: hov ? (hoverBg || "var(--surface-2)") : "transparent",
-        color: hov ? (hoverColor || "var(--ink)") : "var(--ink-2)",
-        transition: "background .15s, color .15s, transform .08s",
-        flexShrink: 0,
-      }}
-      onMouseDown={e => { e.currentTarget.style.transform = "translateY(1px)"; }}
-      onMouseUp={e => { e.currentTarget.style.transform = "translateY(0)"; }}
-    >
-      {children}
-    </button>
-  );
-}
 
 // Animated classifying card shown while save API call is in flight
 function ClassifyingCard({ url, onComplete }) {
@@ -107,13 +53,13 @@ function ClassifyingCard({ url, onComplete }) {
         <div style={{ width: 20, height: 20, flexShrink: 0, border: "2px solid var(--accent-tint-2)", borderTopColor: "var(--accent)", borderRadius: 99, animation: "spin 0.7s linear infinite" }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <b style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", display: "block" }}>Classifying…</b>
-          <span style={{ fontSize: 11.5, color: "var(--muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", marginTop: 2 }}>{domain}</span>
+          <span style={{ fontSize: 11.5, color: "var(--muted)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", marginTop: 2 }}>{domain}</span>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {STEPS.map((s, i) => (
-          <div key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontFamily: "monospace", color: i < step ? "var(--try)" : i === step ? "var(--ink-2)" : "var(--muted-2)", opacity: i > step ? 0.4 : 1, transition: "opacity .2s, color .2s" }}>
-            <span style={{ width: 14, height: 14, borderRadius: 99, border: `1px solid ${i < step ? "var(--try)" : i === step ? "var(--accent)" : "var(--line)"}`, background: i < step ? "var(--try)" : i === step ? "var(--accent-tint)" : "var(--surface-2)", color: i < step ? "#fff" : i === step ? "var(--accent)" : "transparent", display: "grid", placeItems: "center", fontSize: 8, flexShrink: 0, transition: "all .2s" }}>
+          <div key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontFamily: "var(--font-mono)", color: i < step ? "var(--try)" : i === step ? "var(--ink-2)" : "var(--muted-2)", opacity: i > step ? 0.4 : 1, transition: "opacity .2s, color .2s" }}>
+            <span style={{ width: 14, height: 14, borderRadius: 99, border: `1px solid ${i < step ? "var(--try)" : i === step ? "var(--accent)" : "var(--line)"}`, background: i < step ? "var(--try)" : i === step ? "var(--accent-tint)" : "var(--surface-2)", color: i < step ? "var(--on-color)" : i === step ? "var(--accent)" : "transparent", display: "grid", placeItems: "center", fontSize: 8, flexShrink: 0, transition: "all .2s" }}>
               {i < step ? "✓" : ""}
             </span>
             {s}
@@ -139,7 +85,7 @@ function EmptyState({ queue }) {
   );
 }
 
-export default function LinksView({ onLogout, onSettings, onFeeds }) {
+export default function LinksView({ onLogout, onNavigate }) {
   const [allLinks, setAllLinks] = useState([]);
   const [activeQueue, setActiveQueue] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -156,12 +102,45 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [semanticResults, setSemanticResults] = useState(null); // null = no semantic results (fall back to substring)
   const [searching, setSearching] = useState(false);
+  // The one discovery filter: topic keys from the panel, combined by `tagLogic`
+  // ("any" = union, "all" = intersection). Resolved server-side (see the effect
+  // below) because membership must reflect the whole library, not the 500-row
+  // page the dashboard happens to hold.
+  const [activeTags, setActiveTags] = useState([]);
+  const [tagLogic, setTagLogic] = useState("any");
+  const [tagResults, setTagResults] = useState(null);
+  const [topics, setTopics] = useState([]);
+  const [topicsLoading, setTopicsLoading] = useState(true);
+  const [showAllTopics, setShowAllTopics] = useState(false);
+  const [topicsOpen, setTopicsOpen] = useState(false);
+
+  const toggleTag = useCallback((key) => {
+    setActiveTags(prev => {
+      if (prev.includes(key)) return prev.filter(k => k !== key);
+      // The server rejects more than MAX_TAGS keys; refusing here keeps that
+      // from arriving as an empty result set with no cause on screen.
+      return prev.length >= MAX_TAGS ? prev : [...prev, key];
+    });
+  }, []);
+  // A stable primitive to depend on: a fresh array literal every render would
+  // re-fire the fetch effects forever.
+  const tagKey = activeTags.join("\u0000");
   const [username, setUsername] = useState(null);
   // BYOK onboarding — prompt a keyless user (with no shared key to fall back on)
   // to add a provider key, else their saved links never get classified.
   const [needsByok, setNeedsByok] = useState(false);
   const [showByok, setShowByok] = useState(false);
   const [byokDismissed, setByokDismissed] = useState(false);
+  const urlRef = useRef(null);
+
+  // Pressing "Save link" from Feeds or Settings routes here first; the flag is
+  // what survives that navigation.
+  useEffect(() => {
+    if (sessionStorage.getItem(FOCUS_URL_FLAG)) {
+      sessionStorage.removeItem(FOCUS_URL_FLAG);
+      urlRef.current?.focus();
+    }
+  }, []);
 
   // apply body classes
   useEffect(() => {
@@ -180,10 +159,13 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      // Only the two link calls are load-bearing. The username and the BYOK
+      // check are decoration, so they each swallow their own failure rather
+      // than rejecting the Promise.all and leaving the library rendered empty.
       const [active, archived, me, settings] = await Promise.all([
         api.getLinks({ limit: 500 }),
         api.getLinks({ queue: "archive", limit: 500 }),
-        api.getMe(),
+        api.getMe().catch(() => null),
         api.getSettings().catch(() => null),
       ]);
       setAllLinks([...active, ...archived]);
@@ -204,6 +186,15 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Links can be saved from outside this view — the notification drawer turns a
+  // feed update into saves. Without this the dashboard behind it would keep
+  // showing a library that no longer matches.
+  useEffect(() => {
+    const h = () => fetchAll();
+    window.addEventListener("arciv:links-changed", h);
+    return () => window.removeEventListener("arciv:links-changed", h);
+  }, [fetchAll]);
 
   // Silent refresh (no loading spinner) — used to poll for background AI results.
   const refreshSilently = useCallback(async () => {
@@ -235,6 +226,59 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     return () => clearInterval(id);
   }, [hasPending, refreshSilently]);
 
+  // Topics are derived from ai_tags on read, so they change whenever a tag does
+  // — a background classify landing, an edit in the drawer. Keying the refetch
+  // on a signature of the tags themselves means no mutation site has to remember
+  // to invalidate this.
+  const tagSignature = useMemo(
+    () => allLinks.map(l => (l.ai_tags ?? []).join(",")).join("|"),
+    [allLinks]
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setTopicsLoading(true);
+    api
+      // Scoped to the active tab, so the rail on Try Later lists Try Later's
+      // topics with Try Later's counts. The server applies the same queue/status
+      // rule the link list does (api/utils/link_query.apply_queue_scope), so a
+      // chip's number is exactly what clicking it will show.
+      // Ask for the full tail in one request: "+N more" and the query-narrowing
+      // in the panel are then instant, and min_count=1 is what makes a
+      // one-link topic findable by typing its name.
+      .getTopics({ queue: activeQueue ?? undefined, min_count: 1, limit: 500 })
+      .then(r => { if (!cancelled) setTopics(r); })
+      .catch(() => { if (!cancelled) setTopics([]); })
+      .finally(() => { if (!cancelled) setTopicsLoading(false); });
+    return () => { cancelled = true; };
+  }, [tagSignature, activeQueue]);
+
+  // A topic that exists in one tab usually doesn't in the next, so a selection
+  // carried across tabs would leave the panel with no active chip and the list
+  // empty, with nothing on screen explaining why.
+  useEffect(() => { setActiveTags([]); setShowAllTopics(false); }, [activeQueue]);
+
+  // Below two topics, Any and All describe the same set. Resetting to "any"
+  // keeps a stale "must match all" out of the summary line after a Clear.
+  useEffect(() => { if (activeTags.length < 2) setTagLogic("any"); }, [activeTags.length]);
+
+  // Topic browsing (no search query) is a server query: the tag must resolve
+  // over the whole library, not over whatever subset is loaded client-side.
+  useEffect(() => {
+    if (!activeTags.length || searchQuery.trim()) { setTagResults(null); return; }
+    let cancelled = false;
+    api
+      .getLinks({
+        tag: activeTags,
+        tag_logic: tagLogic,
+        queue: activeQueue ?? undefined,
+        limit: 500,
+      })
+      .then(r => { if (!cancelled) setTagResults(r); })
+      .catch(() => { if (!cancelled) setTagResults([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagKey, tagLogic, activeQueue, searchQuery]);
+
   // Debounced semantic search. Server returns relevance-ranked, whole-library
   // results; on error/503 we fall back to client-side substring filtering.
   useEffect(() => {
@@ -244,7 +288,9 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const res = await api.searchLinks(q);
+        // Tags go to the server with the query so ranking happens over the
+        // filtered set — not "top 30 overall, then keep the 3 that match".
+        const res = await api.searchLinks(q, { tag: activeTags, tag_logic: tagLogic });
         if (!cancelled) setSemanticResults(res);
       } catch {
         if (!cancelled) setSemanticResults(null); // fall back to substring
@@ -253,7 +299,23 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, tagKey, tagLogic]);
+
+  // Client-side twin of the server tag filter, used only on the offline
+  // substring fallback below. Comparison goes through the shared normaliser so a
+  // "React Native" tag still matches the "react-native" key the rail supplied.
+  const matchesTag = useCallback(
+    (l) => {
+      if (!activeTags.length) return true;
+      const keys = (l.ai_tags ?? []).map(normaliseTag);
+      return tagLogic === "all"
+        ? activeTags.every(k => keys.includes(k))
+        : activeTags.some(k => keys.includes(k));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tagKey, tagLogic]
+  );
 
   // Visible links. With a query: semantic results when available, else an
   // instant substring match over the whole library (also the fallback while the
@@ -262,18 +324,25 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       if (semanticResults) return semanticResults;
+      // Degraded path: semantic search is down, so match substrings locally. The
+      // active topic still has to hold here or the fallback would quietly widen
+      // the result set the user asked to narrow.
       return allLinks.filter(l =>
-        l.title?.toLowerCase().includes(q) ||
-        l.canonical_url?.toLowerCase().includes(q) ||
-        l.description?.toLowerCase().includes(q) ||
-        l.ai_summary?.toLowerCase().includes(q) ||
-        l.ai_tags?.some(t => t.toLowerCase().includes(q))
+        matchesTag(l) && (
+          l.title?.toLowerCase().includes(q) ||
+          l.canonical_url?.toLowerCase().includes(q) ||
+          l.description?.toLowerCase().includes(q) ||
+          l.ai_summary?.toLowerCase().includes(q) ||
+          l.ai_tags?.some(t => t.toLowerCase().includes(q))
+        )
       );
     }
+    if (activeTags.length) return tagResults ?? [];
     if (activeQueue === "archive") return allLinks.filter(l => l.status === "done");
     if (activeQueue === null) return allLinks.filter(l => l.status !== "done");
     return allLinks.filter(l => l.queue === activeQueue && l.status !== "done");
-  }, [allLinks, activeQueue, searchQuery, semanticResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allLinks, activeQueue, searchQuery, semanticResults, tagKey, tagResults, matchesTag]);
 
   // Counts per tab
   const counts = useMemo(() => ({
@@ -443,14 +512,6 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const maxDay = Math.max(...weekActivity, 1);
   const hr = _now.getHours();
   const timeGreeting = hr < 5 ? "Still up" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-  const dateLine = _now.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }).toUpperCase();
-  const weekNo = (() => {
-    const d = new Date(Date.UTC(_now.getFullYear(), _now.getMonth(), _now.getDate()));
-    const day = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - day);
-    const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - ys) / 86400000) + 1) / 7);
-  })();
   const inboxCount = counts.inbox || 0;
   const archiveCount = counts.archive || 0;
   const autoPct = stats.classified;
@@ -458,116 +519,46 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
   const effectiveLayout = isMobile ? "grid" : layout;
   const tabTitle = TAB_LABELS[activeQueue ?? "all"] || "All";
   const tabSub = TAB_SUBTITLES[activeQueue ?? "all"];
-  const initials = username
-    ? username.split("_").slice(0, 2).map(w => w[0].toUpperCase()).join("")
-    : "AR";
-
-  const ArcivMark = (
-    <div style={{
-      width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-      background: "radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.35), transparent 55%), linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 65%, #1a0c4a))",
-      display: "grid", placeItems: "center",
-      boxShadow: "0 1px 0 rgba(255,255,255,.6) inset, 0 -3px 8px rgba(0,0,0,.18) inset, 0 4px 14px -2px color-mix(in oklab, var(--accent) 60%, transparent), 0 1px 2px rgba(0,0,0,.08)",
-    }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 1px 0 rgba(0,0,0,.12))" }}>
-        <path d="M4 18h16M7 18 12 6l5 12M9.5 14h5"/>
-      </svg>
-    </div>
-  );
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      {/* ── Topbar ── */}
-      <div style={{ position: "sticky", top: isMobile ? 8 : 12, zIndex: 30, padding: isMobile ? "0 10px" : "0 16px" }}>
-      <header style={{
-        display: "flex", flexDirection: "column",
-        padding: isMobile ? "10px 14px" : "10px 16px",
-        background: "color-mix(in oklab, var(--nav) 82%, transparent)",
-        backdropFilter: "blur(24px) saturate(170%)",
-        WebkitBackdropFilter: "blur(24px) saturate(170%)",
-        border: "1px solid var(--line)",
-        borderRadius: isMobile ? 16 : 18,
-        boxShadow: "0 1px 0 rgba(255,255,255,.55) inset, 0 4px 24px rgba(0,0,0,.07)",
-        gap: isMobile ? 8 : 0,
-      }}>
-        {/* Main nav row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Brand */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-            {ArcivMark}
-            {!isMobile && (
-              <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, fontWeight: 400, letterSpacing: "-0.02em", color: "var(--ink)" }}>
-                arciv<em style={{ color: "var(--accent)" }}>.</em>
-              </span>
+      <TopNav
+        active="library"
+        onNavigate={onNavigate}
+        onSave={() => urlRef.current?.focus()}
+        onLogout={onLogout}
+        dark={dark}
+        onToggleDark={() => setDark(d => !d)}
+        /* Desktop keeps the field in the bar; the phone cannot spare the width,
+           so there it moves into the page and the bar shows its "Save" CTA
+           instead — the same button the other routes use, focusing the field
+           rather than navigating. The error hangs off the bar rather than
+           displacing it, so a 409 does not shove the page down. */
+        saver={isMobile ? null : (
+          <div style={{ position: "relative" }}>
+            <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
+            {saveError && (
+              <span style={{
+                position: "absolute", left: 14, top: "100%", marginTop: 3,
+                fontSize: 12, color: "var(--read)", whiteSpace: "nowrap",
+              }}>{saveError}</span>
             )}
           </div>
-
-          {/* URL input — desktop only, inline */}
-          {!isMobile && (
-            <>
-              <div style={{ width: 1, height: 20, background: "var(--line)", flexShrink: 0 }} />
-              <div style={{ flex: 1, maxWidth: 560 }}>
-                <UrlInputBar onSave={handleSave} loading={saving} />
-              </div>
-              {saveError && <span style={{ fontSize: 11.5, color: "var(--read)", whiteSpace: "nowrap", flexShrink: 0 }}>{saveError}</span>}
-            </>
-          )}
-
-          <div style={{ flex: 1 }} />
-
-          {/* Right cluster — nav pill */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 2,
-            padding: 4, borderRadius: 11, flexShrink: 0,
-            background: "color-mix(in oklab, var(--surface) 70%, transparent)",
-            border: "1px solid var(--line)",
-            boxShadow: "0 1px 0 rgba(255,255,255,.5) inset, 0 1px 2px rgba(22,21,19,.03)",
-          }}>
-            <NotificationBell />
-            <NavIconBtn onClick={onFeeds} title="Feed Tracker" hoverBg="var(--watch-tint)" hoverColor="var(--watch)">
-              <FeedsIcon />
-            </NavIconBtn>
-            <NavIconBtn onClick={onSettings} title="Settings" hoverBg="var(--accent-tint)" hoverColor="var(--accent)">
-              <SettingsIcon />
-            </NavIconBtn>
-            <NavIconBtn onClick={() => setDark(d => !d)} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? <SunIcon /> : <MoonIcon />}
-            </NavIconBtn>
-            <div style={{ width: 1, height: 18, background: "var(--line)", margin: "0 3px", flexShrink: 0 }} />
-            <button
-              title={username ?? "Account"}
-              style={{
-                width: 34, height: 34, borderRadius: 99, border: 0, padding: 0,
-                cursor: "default",
-                background: "radial-gradient(120% 100% at 30% 25%, rgba(255,255,255,.4), transparent 55%), linear-gradient(135deg, var(--accent), #b58dff)",
-                display: "grid", placeItems: "center", color: "#fff",
-                fontSize: 12, fontWeight: 600, flexShrink: 0,
-                boxShadow: "0 0 0 2px var(--nav), 0 0 0 3px var(--line), 0 2px 6px rgba(109,58,255,.25)",
-                transition: "transform .12s, box-shadow .15s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 0 0 2px var(--nav), 0 0 0 3px var(--accent), 0 4px 10px rgba(109,58,255,.3)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 0 0 2px var(--nav), 0 0 0 3px var(--line), 0 2px 6px rgba(109,58,255,.25)"; }}
-            >
-              {initials}
-            </button>
-            <NavIconBtn onClick={onLogout} title="Log out" hoverBg="var(--read-tint)" hoverColor="var(--read)">
-              <LogoutIcon />
-            </NavIconBtn>
-          </div>
-        </div>
-
-        {/* Mobile: URL input as second row */}
-        {isMobile && (
-          <div>
-            <UrlInputBar onSave={handleSave} loading={saving} />
-            {saveError && <span style={{ display: "block", fontSize: 11.5, color: "var(--read)", marginTop: 4 }}>{saveError}</span>}
-          </div>
         )}
-      </header>
-      </div>
+      />
 
       {/* ── Page ── */}
       <main className="arciv-page-pad" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 28px 80px" }}>
+
+        {/* Phone only — see the note on `saver` above. It leads the page because
+            saving is the dashboard's primary action. */}
+        {isMobile && (
+          <div style={{ marginBottom: 20 }}>
+            <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
+            {saveError && (
+              <span style={{ display: "block", fontSize: 12, color: "var(--read)", marginTop: 6 }}>{saveError}</span>
+            )}
+          </div>
+        )}
 
         {/* BYOK nudge — only when AI is unavailable (no personal + no shared key) */}
         {needsByok && !byokDismissed && (
@@ -613,14 +604,6 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         {/* Hero */}
         <section className="arciv-hero" aria-label="Welcome">
           <div className="arciv-hero-greet">
-            <div className="arciv-hero-eyebrow">
-              <span className={`arciv-hero-pulse${inboxCount > 0 ? " warn" : ""}`} />
-              <span>{dateLine}</span>
-              <span className="arciv-hero-sep" />
-              <span>WEEK {weekNo}</span>
-              <span className="arciv-hero-sep" />
-              <span>{allLinks.filter(l => l.status !== "done").length} LINKS · {inboxCount === 0 ? "INBOX ZERO" : `${inboxCount} TO TRIAGE`}</span>
-            </div>
             <h1 className="arciv-hero-title">
               {timeGreeting}, <em>{username ?? "there"}</em>.
             </h1>
@@ -711,20 +694,20 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
         {/* Page head */}
         <div className="arciv-page-head" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 12 }}>
           <div>
-            <h1 style={{ margin: 0, fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: isMobile ? 28 : 36, color: "var(--ink)", letterSpacing: "-0.02em", lineHeight: 1 }}>
+            <h1 style={{ margin: 0, fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: isMobile ? 28 : 36, color: "var(--ink)", letterSpacing: "-0.02em", lineHeight: 1 }}>
               {tabTitle}
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 13, color: "var(--muted)", flexWrap: "wrap" }}>
               <span>{tabSub}</span>
               <span style={{ width: 3, height: 3, borderRadius: 99, background: "var(--muted-2)" }} />
               {searchQuery.trim() ? (
-                <span style={{ fontFamily: "monospace" }}>
+                <span style={{ fontFamily: "var(--font-mono)" }}>
                   {searching
                     ? "searching…"
                     : `${visible.length} ${semanticResults ? "result" : "match"}${visible.length !== 1 ? "s" : ""}`}
                 </span>
               ) : (
-                <span style={{ fontFamily: "monospace" }}>{visible.length} link{visible.length !== 1 ? "s" : ""}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{visible.length} link{visible.length !== 1 ? "s" : ""}</span>
               )}
             </div>
           </div>
@@ -748,40 +731,56 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
           </div>}
         </div>
 
-        {/* Tabs */}
-        <div style={{ marginBottom: 12 }}>
-          <QueueTabs active={activeQueue} onChange={setActiveQueue} counts={counts} />
-        </div>
-
-        {/* Search */}
-        <div style={{ marginBottom: 20, position: "relative" }}>
-          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none", display: "flex" }}>
-            <SearchIcon />
-          </span>
-          <input
-            type="text"
-            placeholder="Search your library by meaning…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{
-              width: "100%", height: 40, paddingLeft: 36, paddingRight: searchQuery ? 36 : 12,
-              border: "1px solid var(--line)", borderRadius: 10,
-              background: "var(--surface)", color: "var(--ink)",
-              fontSize: 13, outline: "none", boxShadow: "var(--shadow-card)",
-              transition: "border-color .15s",
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-            onBlur={e => { e.currentTarget.style.borderColor = "var(--line)"; }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: 0, background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px", borderRadius: 4 }}
-            >
-              ×
-            </button>
-          )}
-        </div>
+        {/* Discovery — tabs, search and topics in one card, because all three
+            narrow the same list. Topic chips are multi-select and combine by
+            Any/All; the selection is resolved server-side so it holds over the
+            whole library rather than the page held in memory. */}
+        <TopicsFilter
+          topics={topics}
+          loading={topicsLoading}
+          selected={activeTags}
+          onToggle={toggleTag}
+          onClear={() => setActiveTags([])}
+          logic={tagLogic}
+          onLogicChange={setTagLogic}
+          open={topicsOpen}
+          onToggleOpen={() => setTopicsOpen(v => !v)}
+          query={searchQuery}
+          showAll={showAllTopics}
+          onToggleShowAll={() => setShowAllTopics(v => !v)}
+          tabsSlot={<QueueTabs active={activeQueue} onChange={setActiveQueue} counts={counts} flat />}
+          searchSlot={
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none", display: "flex" }}>
+                <SearchIcon />
+              </span>
+              <input
+                type="text"
+                placeholder="Search your library by meaning, or type a topic…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%", height: 40, paddingLeft: 36, paddingRight: searchQuery ? 36 : 12,
+                  border: "1px solid var(--line)", borderRadius: 10,
+                  background: "var(--surface)", color: "var(--ink)",
+                  fontSize: 13, outline: "none",
+                  transition: "border-color .15s",
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "var(--line)"; }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  title="Clear search"
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: 0, background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px", borderRadius: 4 }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          }
+        />
 
         {/* Cards */}
         {loading ? (
@@ -795,7 +794,23 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
           <div className="arciv-cards-grid arciv-grid" style={{ display: "grid", gridTemplateColumns: effectiveLayout === "list" ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: effectiveLayout === "list" ? 8 : 14 }}>
             {pendingUrl && <ClassifyingCard url={pendingUrl} onComplete={handleClassifyComplete} />}
             {visible.length === 0 && !pendingUrl ? (
-              searchQuery.trim() ? (
+              /* A topic combination that matches nothing needs the way out named
+                 — an empty grid under a filter bar reads as "you have nothing
+                 saved", which is rarely what happened. */
+              activeTags.length ? (
+                <div style={{ gridColumn: "1/-1", border: "1px dashed var(--line)", borderRadius: 15, padding: 40, textAlign: "center" }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>
+                    Nothing matches this combination
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>
+                    {tagLogic === "all" && activeTags.length > 1
+                      ? <>Try switching to <strong style={{ color: "var(--accent)", fontWeight: 600 }}>Any</strong>, or clear a topic.</>
+                      : searchQuery.trim()
+                        ? <>No link matches both the search and {activeTags.length > 1 ? "these topics" : "this topic"}.</>
+                        : <>Clear the topic to see the rest of this tab.</>}
+                  </div>
+                </div>
+              ) : searchQuery.trim() ? (
                 <div style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", gap: 12 }}>
                   <div style={{ width: 56, height: 56, borderRadius: 16, background: "var(--surface-2)", display: "grid", placeItems: "center", fontSize: 22 }}>🔍</div>
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>No matches found</h3>
@@ -841,7 +856,7 @@ export default function LinksView({ onLogout, onSettings, onFeeds }) {
             <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--muted)", margin: "0 0 20px" }}>This action cannot be undone.</p>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: "9px 0", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface-2)", color: "var(--ink-2)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Cancel</button>
-              <button onClick={() => handleDeleteConfirmed(deleteConfirm)} style={{ flex: 1, padding: "9px 0", border: 0, borderRadius: 10, background: "var(--read)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              <button onClick={() => handleDeleteConfirmed(deleteConfirm)} style={{ flex: 1, padding: "9px 0", border: 0, borderRadius: 10, background: "var(--read)", color: "var(--on-color)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
             </div>
           </div>
         </div>

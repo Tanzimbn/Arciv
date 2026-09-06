@@ -67,7 +67,7 @@ export default function ByokOnboarding({ onDone, initialProvider = "gemini" }) {
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
             </svg>
           </div>
-          <h2 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 26, margin: 0, color: "var(--ink)" }}>
+          <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: 0, color: "var(--ink)" }}>
             Turn on AI classification
           </h2>
         </div>
