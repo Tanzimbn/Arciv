@@ -269,6 +269,9 @@ async def test_topics_require_auth(client, app_state):
         # regex engine reads the \t / \n escapes in _SEPARATORS_SQL the same way
         # Python's does. If it does not, switch the pattern to [[:space:]_]+.
         ["tab\there", "new\nline", "carriage\rreturn"],
+        # Non-breaking / em spaces: the count and the filter have to key these
+        # identically even though neither side folds them to a hyphen.
+        ["\xa0Rust\xa0", "em\u2003space", "plain rust"],
     ],
 )
 async def test_every_topic_count_matches_its_filtered_link_list(
@@ -305,6 +308,10 @@ async def test_python_and_sql_normalisers_agree_in_postgres(app_state):
         "tab\there", "new\nline", "form\ffeed", "vert\vtab", "carriage\rreturn",
         "-- ci/cd --", "Node.js", "C++", "Café Culture", "日本語 タグ",
         "___", "   ", "-", "a \t\n_ b",
+        # Unicode spaces at the edges. Python's str.strip() removed these while
+        # btrim() left them, so the key differed between the count and the
+        # filter; neither side trims now.
+        "\xa0Rust\xa0", "\u2003Rust", "a\xa0b", "\xa0", "\u3000 mixed \xa0",
     ]
     async with AsyncSessionLocal() as db:
         for raw in samples:
