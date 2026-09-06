@@ -89,13 +89,20 @@ function IconBtn({ onClick, title, children }) {
  * icon cluster) and SubpageNav's (brand + "Back to dashboard" + theme toggle).
  * Having two meant Feeds and Settings could only be reached from the dashboard
  * and only by icon, while the dashboard had no way back to itself; text links
- * for the three routes fix both, and the URL field moves down into the page
- * where it can have full width.
+ * for the three routes fix both.
+ *
+ * `saver` is the paste-a-URL field, supplied by whichever route can actually
+ * save (the dashboard). It sits between the route links and the icon cluster,
+ * so the primary action is reachable without scrolling back to the top of the
+ * page. A route that passes it does not get the "Save link" CTA as well: that
+ * button exists only to focus this field, so next to the field it would be two
+ * controls for one action. Routes without a saver keep the CTA, which sends
+ * them to the dashboard and focuses it there.
  *
  * `onNavigate` is App's router, so these are real path changes: the URL, the
  * back button and a bookmark all agree with what's on screen.
  */
-export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onToggleDark }) {
+export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onToggleDark, saver }) {
   const { isMobile } = useBreakpoint();
 
   const links = (
@@ -114,7 +121,7 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
     }}>
       <header style={{
         display: "flex", flexDirection: "column", gap: 8,
-        width: isMobile ? "100%" : "fit-content", maxWidth: 1180,
+        width: isMobile || saver ? "100%" : "fit-content", maxWidth: 1180,
         padding: isMobile ? "8px 10px" : "8px 8px 8px 18px",
         background: "color-mix(in oklab, var(--nav) 86%, transparent)",
         backdropFilter: "blur(24px) saturate(170%)",
@@ -135,7 +142,10 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
           </button>
 
           {!isMobile && links}
-          {isMobile && <div style={{ flex: 1 }} />}
+          {!isMobile && saver && (
+            <div style={{ flex: 1, minWidth: 260 }}>{saver}</div>
+          )}
+          {(isMobile || !saver) && <div style={{ flex: 1 }} />}
 
           <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
             <NotificationBell />
@@ -147,7 +157,7 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
             )}
           </div>
 
-          <button
+          {!saver && <button
             onClick={onSave}
             style={{
               display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0,
@@ -164,8 +174,12 @@ export default function TopNav({ active, onNavigate, onSave, onLogout, dark, onT
           >
             <PlusIcon />
             {isMobile ? "Save" : "Save link"}
-          </button>
+          </button>}
         </div>
+
+        {/* Narrow screens give the field its own full-width row — squeezed in
+            beside the brand and icons there is no room to read a URL. */}
+        {isMobile && saver && <div>{saver}</div>}
 
         {/* Narrow screens put the routes on their own row rather than dropping
             them, so Feeds and Settings stay one tap away. */}

@@ -528,19 +528,25 @@ export default function LinksView({ onLogout, onNavigate }) {
         onLogout={onLogout}
         dark={dark}
         onToggleDark={() => setDark(d => !d)}
+        /* The dashboard is the only route that can save, so it is the only one
+           that supplies the field. The error hangs off the bar rather than the
+           page: it is about the URL just typed, and the field is now in the
+           nav. */
+        saver={
+          <div style={{ position: "relative" }}>
+            <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
+            {saveError && (
+              <span style={{
+                position: "absolute", left: 14, top: "100%", marginTop: 3,
+                fontSize: 12, color: "var(--read)", whiteSpace: "nowrap",
+              }}>{saveError}</span>
+            )}
+          </div>
+        }
       />
 
       {/* ── Page ── */}
       <main className="arciv-page-pad" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 28px 80px" }}>
-
-        {/* Save a link — the dashboard's primary action, so it leads the page.
-            The nav's "Save link" button focuses this field. */}
-        <div style={{ marginBottom: 22 }}>
-          <UrlInputBar onSave={handleSave} loading={saving} inputRef={urlRef} />
-          {saveError && (
-            <span style={{ display: "block", fontSize: 12, color: "var(--read)", marginTop: 6 }}>{saveError}</span>
-          )}
-        </div>
 
         {/* BYOK nudge — only when AI is unavailable (no personal + no shared key) */}
         {needsByok && !byokDismissed && (

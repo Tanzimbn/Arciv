@@ -94,7 +94,10 @@ body.dark {
   --bg: #14120f;
   --nav: #1b1814;
   --surface: #221f1a;
-  --surface-2: #2b2721;
+  /* 1.11:1 from the card, i.e. the domain pill and the ⌘V hint were shapes you
+     could only find by their border. 1.30 puts them in the same visible band
+     as the queue chips; --ink-2 on it is still 8.7:1. */
+  --surface-2: #38322a;
   --ink: #f2efe8;      /* off-white, not #fff — less halation */
   --ink-2: #dad5ca;
   --muted: #b3ab9c;    /* was #878379 */
@@ -108,8 +111,15 @@ body.dark {
   --accent-deep: #c9b5ff;
   --accent-ink: #17102e;
   --on-color: #14120f;
-  --accent-tint: #2a2044;
-  --accent-tint-2: #3a2a63;
+  /* A chip fill has to read as a chip. Measured against the card (#221f1a),
+     the queue tints below land at 1.25-1.37:1 and are visible; these two sat
+     at 1.09 and 1.32, so an ai-tag chip was a 1.09 patch on the card — the
+     "tag background mixes into the card" complaint. Both step up to join that
+     band, and accent-tint-2 moves further so the two-step scale (wash vs.
+     disabled-fill) does not collapse into one. Accent text on the new tint is
+     4.76:1, still AA. */
+  --accent-tint: #372a5e;
+  --accent-tint-2: #483681;
   /* Queue hues lightened for dark ground; the light-mode values were 3:1 or
      worse here. */
   --read: #ff8f66;
@@ -129,7 +139,9 @@ body.dark {
   --archive-tint: rgba(242,239,232,.08);
   --good-tint: rgba(61,220,154,.13);
   --warn-tint: rgba(229,192,76,.14);
-  --bad-tint: rgba(204,58,58,.12);
+  /* Followed the light-mode red (204,58,58) rather than dark's --bad, which
+     made it both off-hue and the weakest fill on the card at 1.10:1. */
+  --bad-tint: rgba(255,128,128,.16);
 }
 
 * { box-sizing: border-box; }
