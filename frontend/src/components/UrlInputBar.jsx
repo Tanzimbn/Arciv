@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function UrlInputBar({ onSave, loading }) {
+export default function UrlInputBar({ onSave, loading, inputRef }) {
   const [url, setUrl] = useState("");
   const [focused, setFocused] = useState(false);
 
@@ -37,6 +37,7 @@ export default function UrlInputBar({ onSave, loading }) {
           <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
         </svg>
         <input
+          ref={inputRef}
           type="url"
           value={url}
           onChange={e => setUrl(e.target.value)}
@@ -51,7 +52,7 @@ export default function UrlInputBar({ onSave, loading }) {
         />
         {!hasUrl && (
           <span style={{
-            fontSize: 11, fontFamily: "monospace", color: "var(--muted-2)",
+            fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--muted-2)",
             padding: "2px 6px", borderRadius: 5,
             background: "var(--surface-2)", border: "1px solid var(--line)",
             flexShrink: 0,

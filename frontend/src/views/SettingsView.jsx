@@ -134,11 +134,10 @@ function ToggleRow({ checked, onChange, label, description, last }) {
 }
 
 /* ── Main ─────────────────────────────────────────────────── */
-export default function SettingsView({ onBack }) {
+export default function SettingsView({ onNavigate, onLogout }) {
   const { isMobile } = useBreakpoint();
   const [settings, setSettings] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [notifyTelegram, setNotifyTelegram] = useState(false);
   const [notifyInApp, setNotifyInApp] = useState(true);
   const [usernameInput, setUsernameInput] = useState("");
   const [savedUsername, setSavedUsername] = useState("");
@@ -149,10 +148,7 @@ export default function SettingsView({ onBack }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [telegramToken, setTelegramToken] = useState("");
-  const [generatingToken, setGeneratingToken] = useState(false);
   const [focused, setFocused] = useState(null);
-  const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -162,7 +158,6 @@ export default function SettingsView({ onBack }) {
   useEffect(() => {
     api.getSettings().then(s => {
       setSettings(s);
-      setNotifyTelegram(s.feed_notify_telegram);
       setNotifyInApp(s.feed_notify_inapp);
       setUsernameInput(s.username ?? "");
       setSavedUsername(s.username ?? "");
@@ -175,7 +170,7 @@ export default function SettingsView({ onBack }) {
     setSaving(true); setError(""); setSuccess("");
     try {
       setSettings(await api.updateSettings({
-        feed_notify_telegram: notifyTelegram, feed_notify_inapp: notifyInApp,
+        feed_notify_inapp: notifyInApp,
       }));
       setSuccess("Preferences saved.");
     } catch { setError("Failed to save settings."); }
@@ -197,22 +192,6 @@ export default function SettingsView({ onBack }) {
     } catch (err) {
       setUsernameError(err?.data?.detail === "Username already taken." ? "Username already taken." : "Failed to save username.");
     } finally { setUsernameSaving(false); }
-  }
-
-  async function handleGenerateTelegramToken() {
-    setGeneratingToken(true); setError("");
-    try {
-      const r = await api.generateTelegramToken();
-      setTelegramToken(r.token);
-      setSuccess("Token generated — send it to the Arciv bot to link your account.");
-    } catch { setError("Failed to generate token."); }
-    finally { setGeneratingToken(false); }
-  }
-
-  function handleCopyToken() {
-    navigator.clipboard.writeText(telegramToken);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleExport() {
@@ -240,14 +219,14 @@ export default function SettingsView({ onBack }) {
 
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
-      <SubpageNav onBack={onBack} />
+    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
+      <SubpageNav active="settings" onNavigate={onNavigate} onLogout={onLogout} />
 
       {/* Page */}
       <main className="arciv-page-pad" style={{ maxWidth: 720, margin: "0 auto", padding: isMobile ? "20px 16px 80px" : "36px 28px 80px" }}>
         {/* Heading */}
         <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
+          <h1 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
             Settings
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--muted)", margin: "6px 0 0" }}>
@@ -338,95 +317,10 @@ export default function SettingsView({ onBack }) {
                   onChange={() => setNotifyInApp(v => !v)}
                   label="In-app notifications"
                   description="Show alerts in the notification bell while you're using Arciv"
-                  last={!settings.telegram_enabled}
+                  last
                 />
-                {settings.telegram_enabled && (
-                  <ToggleRow
-                    checked={notifyTelegram}
-                    onChange={() => setNotifyTelegram(v => !v)}
-                    label="Telegram notifications"
-                    description="Receive feed digests and alerts via your linked Telegram account"
-                    last
-                  />
-                )}
               </div>
             </Section>
-
-            {/* Telegram */}
-            {settings.telegram_enabled && (
-              <Section icon={<I.bot />} title="Telegram Bot">
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, margin: 0 }}>
-                    Link your Telegram account to receive daily digests and save links by forwarding them to the bot.
-                  </p>
-
-                  {/* Steps */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      "Generate a token below",
-                      <>Send <code style={{ background: "var(--surface-2)", padding: "1px 7px", borderRadius: 5, fontFamily: "monospace", fontSize: 12, border: "1px solid var(--line)" }}>/start &lt;token&gt;</code> to @arciv_bot</>,
-                      "Your account will be linked automatically",
-                    ].map((step, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ width: 22, height: 22, borderRadius: 99, background: "var(--accent-tint)", color: "var(--accent)", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>
-                          {i + 1}
-                        </div>
-                        <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>{step}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button type="button" onClick={handleGenerateTelegramToken} disabled={generatingToken}
-                    style={{
-                      alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 7,
-                      padding: "9px 18px", border: 0, borderRadius: 10, cursor: generatingToken ? "default" : "pointer",
-                      font: "inherit", fontWeight: 600, fontSize: 13.5,
-                      background: generatingToken ? "var(--accent-tint-2)" : "var(--accent)",
-                      color: generatingToken ? "var(--accent)" : "var(--accent-ink)",
-                      boxShadow: generatingToken ? "none" : "0 2px 10px rgba(109,58,255,.25)",
-                      transition: "background .15s",
-                    }}
-                    onMouseEnter={e => { if (!generatingToken) e.currentTarget.style.background = "var(--accent-deep)"; }}
-                    onMouseLeave={e => { if (!generatingToken) e.currentTarget.style.background = "var(--accent)"; }}
-                  >
-                    <I.bot />
-                    {generatingToken ? "Generating…" : "Generate linking token"}
-                  </button>
-
-                  {telegramToken && (
-                    <div style={{ background: "var(--accent-tint)", border: "1.5px solid color-mix(in oklab, var(--accent) 25%, transparent)", borderRadius: 12, padding: 16 }}>
-                      <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", margin: "0 0 10px" }}>
-                        Your linking token
-                      </p>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <code style={{
-                          flex: 1, background: "var(--surface)", border: "1.5px solid color-mix(in oklab, var(--accent) 20%, transparent)",
-                          borderRadius: 9, padding: "10px 12px", fontSize: 12.5, fontFamily: "monospace",
-                          wordBreak: "break-all", color: "var(--ink)", letterSpacing: "0.04em",
-                        }}>
-                          {telegramToken}
-                        </code>
-                        <button type="button" onClick={handleCopyToken} className="arciv-hov"
-                          style={{
-                            display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 3,
-                            padding: "10px 14px", fontSize: 11.5, fontWeight: 600,
-                            color: copied ? "var(--good)" : "var(--accent)",
-                            background: copied ? "var(--good-tint)" : "var(--surface)",
-                            border: `1.5px solid ${copied ? "color-mix(in oklab, var(--good) 25%, transparent)" : "color-mix(in oklab, var(--accent) 25%, transparent)"}`,
-                            borderRadius: 9, cursor: "pointer", flexShrink: 0,
-                            "--hov-bg": copied ? "color-mix(in oklab, var(--good) 12%, var(--surface))" : "var(--accent-tint)",
-                            "--hov-line": copied ? "color-mix(in oklab, var(--good) 45%, transparent)" : "var(--accent)",
-                            "--hov-color": copied ? "var(--good)" : "var(--accent-deep)",
-                          }}>
-                          {copied ? <I.check /> : <I.copy />}
-                          {copied ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Section>
-            )}
 
             {/* Feedback banners */}
             {error && (
@@ -504,9 +398,9 @@ export default function SettingsView({ onBack }) {
                   style={{
                     padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                     fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    background: "var(--bad)", color: "#fff", whiteSpace: "nowrap", flexShrink: 0,
+                    background: "var(--bad)", color: "var(--on-color)", whiteSpace: "nowrap", flexShrink: 0,
                     "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
-                    "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
+                    "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "var(--on-color)",
                   }}>
                   Delete account
                 </button>
@@ -531,7 +425,7 @@ export default function SettingsView({ onBack }) {
             border: "1px solid var(--line)", borderRadius: 16, padding: 24,
             boxShadow: "0 20px 60px rgba(0,0,0,.3)",
           }}>
-            <h2 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 26, margin: "0 0 8px", color: "var(--ink)" }}>
+            <h2 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 26, margin: "0 0 8px", color: "var(--ink)" }}>
               Delete your account?
             </h2>
             <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55, margin: "0 0 18px" }}>
@@ -568,9 +462,9 @@ export default function SettingsView({ onBack }) {
                 style={{
                   padding: "9px 16px", border: "1px solid var(--bad)", borderRadius: 10,
                   fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer",
-                  background: "var(--bad)", color: "#fff",
+                  background: "var(--bad)", color: "var(--on-color)",
                   "--hov-bg": "color-mix(in oklab, var(--bad) 82%, #000)",
-                  "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "#fff",
+                  "--hov-line": "color-mix(in oklab, var(--bad) 82%, #000)", "--hov-color": "var(--on-color)",
                 }}>
                 {deleting ? "Deleting…" : "Delete forever"}
               </button>

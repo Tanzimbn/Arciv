@@ -38,6 +38,35 @@ async def test_list_shows_only_your_own_links(client, app_state, make_user):
     assert {x["canonical_url"] for x in b} == {"https://example.com/bob-1"}
 
 
+async def test_topics_are_derived_only_from_your_own_links(
+    client, app_state, make_user
+):
+    """GET /api/topics groups unnested ai_tags — the user_id filter has to sit on
+    the links side of that lateral join, not be forgotten because the query no
+    longer looks like a plain SELECT over links."""
+    from sqlalchemy import update
+
+    from api.database import AsyncSessionLocal
+    from api.models.link import Link
+
+    _, alice = await make_user("alice@example.com")
+    _, bob = await make_user("bob@example.com")
+    alice_link = await _create_link(client, alice, "https://example.com/alice")
+    bob_link = await _create_link(client, bob, "https://example.com/bob")
+
+    async with AsyncSessionLocal() as db:
+        for link, tag in ((alice_link, "alice-only"), (bob_link, "bob-only")):
+            await db.execute(
+                update(Link).where(Link.id == link["id"]).values(ai_tags=[tag])
+            )
+        await db.commit()
+
+    a = (await client.get("/api/topics?min_count=1", headers=alice)).json()
+    b = (await client.get("/api/topics?min_count=1", headers=bob)).json()
+    assert [t["key"] for t in a] == ["alice-only"]
+    assert [t["key"] for t in b] == ["bob-only"]
+
+
 @pytest.mark.parametrize(
     "method,suffix,payload",
     [

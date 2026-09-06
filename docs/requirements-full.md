@@ -16,7 +16,6 @@
    - 2.6 [Proactive Agent](#26-proactive-agent)
    - 2.7 [Knowledge Digest](#27-knowledge-digest)
    - 2.8 [Web UI](#28-web-ui)
-   - 2.9 [Telegram Bot](#29-telegram-bot)
 3. [Non-Functional Requirements](#3-non-functional-requirements)
    - 3.1 [Performance](#31-performance)
    - 3.2 [Scalability](#32-scalability)
@@ -43,7 +42,7 @@
 
 ### Problem Statement
 
-People save links constantly — from browsers, Telegram, newsletters, RSS feeds — but they never build into a usable knowledge base. Existing tools (Raindrop.io, Readwise Reader, Pocket) require manual tagging, are closed-source, and don't understand *what you should do* with a link or *when* to surface it again. Pocket shut down in July 2025 and Omnivore shut down in November 2024, leaving a significant gap for an open-source alternative.
+People save links constantly — from browsers, newsletters, RSS feeds — but they never build into a usable knowledge base. Existing tools (Raindrop.io, Readwise Reader, Pocket) require manual tagging, are closed-source, and don't understand *what you should do* with a link or *when* to surface it again. Pocket shut down in July 2025 and Omnivore shut down in November 2024, leaving a significant gap for an open-source alternative.
 
 ### Solution
 
@@ -74,8 +73,6 @@ Arciv is a self-hostable web application where:
 **FR-P-01**: Users must be able to submit a URL via the web app by pasting into an input field.
 
 **FR-P-02**: Users must be able to submit a URL via a browser extension (Chrome/Firefox) with a single click.
-
-**FR-P-03**: Users must be able to submit a URL via the Telegram bot by forwarding a shared link from any mobile browser.
 
 **FR-P-04**: Users must be able to submit a URL via a REST API (`POST /api/links`) for third-party integrations.
 
@@ -229,18 +226,6 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 ---
 
-### 2.9 Telegram Bot
-
-**FR-T-01**: Users must be able to link their Telegram account to their Arciv account via a one-time token flow from the Settings page.
-
-**FR-T-02**: Once linked, forwarding any message containing a URL to the bot must submit that URL to the user's Arciv account via the push flow.
-
-**FR-T-03**: The bot must reply with a confirmation message containing: the detected content type, assigned queue, and a 1-sentence summary — within 30 seconds of submission.
-
-**FR-T-04**: The bot must handle the case where a message contains multiple URLs — each URL must be submitted as a separate item.
-
----
-
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
@@ -288,8 +273,6 @@ All nudges must be dismissable and configurable — users must be able to disabl
 **NFR-SEC-02**: User data must be strictly isolated — queries must always be scoped to the authenticated user's `user_id`; no cross-user data access is permitted.
 
 **NFR-SEC-03**: User-supplied LLM API keys (BYOK) are stored **encrypted at rest** (AES-256 via `ENCRYPTION_KEY`), never returned to the client (masked only), and never committed to version control. An optional operator-level shared key may live in env for the free tier. *(Superseded the original env-only rule once per-user BYOK landed.)*
-
-**NFR-SEC-04**: The Telegram bot webhook must validate the `X-Telegram-Bot-Api-Secret-Token` header on every incoming request.
 
 **NFR-SEC-05**: URL submissions must be validated against a blocklist of known malicious domains (using a community-maintained list) before processing.
 
@@ -349,7 +332,6 @@ Requirements specific to running Arciv as a **public, multi-tenant hosted servic
 | Frontend | React + Vite + TailwindCSS | SPA, fast build, utility-first styling |
 | Feed parsing | `feedparser` (Python) | Handles RSS 1.0, RSS 2.0, Atom |
 | HTML scraping | `httpx` + `beautifulsoup4` | Fetch page content + auto-discover feed URLs |
-| Telegram bot | `python-telegram-bot` | Async, webhook-compatible |
 | Containerisation | Docker + Docker Compose | Single-command self-hosting |
 | Database migrations | Alembic | Version-controlled schema changes |
 | Auth | JWT (via `python-jose`) + bcrypt passwords | Stateless, self-hosted friendly |
@@ -377,8 +359,6 @@ Arciv/
 ├── worker/               # BullMQ job consumers
 │   ├── link_worker.py    # Processes items from the shared queue
 │   └── feed_worker.py    # Polls RSS feeds on schedule
-├── bot/                  # Telegram bot
-│   └── handler.py        # Message handler → API bridge
 ├── db/
 │   └── migrations/       # Alembic migration files
 ├── frontend/             # React SPA
@@ -430,7 +410,6 @@ Cron job fires every 30 min
 | `id` | `uuid` PK | |
 | `email` | `varchar(255)` UNIQUE | |
 | `password_hash` | `varchar(255)` | bcrypt |
-| `telegram_chat_id` | `bigint` NULLABLE | linked Telegram account |
 | `llm_provider` | `varchar(50)` | `anthropic` \| `openai` \| `ollama` |
 | `llm_api_key_enc` | `text` NULLABLE | encrypted at rest |
 | `digest_enabled` | `boolean` | default true |
@@ -492,7 +471,6 @@ Cron job fires every 30 min
 |---|---|---|
 | `POST` | `/api/auth/register` | Create account |
 | `POST` | `/api/auth/login` | Returns JWT |
-| `POST` | `/api/auth/telegram/link` | Returns one-time Telegram link token |
 
 ### Links
 
@@ -627,7 +605,7 @@ Classification rules:
 
 ## 10. Phase Roadmap
 
-> **Status (2026-08-04).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
+> **Status (2026-09-01).** Phases 1–2 have shipped (on ARQ, not BullMQ — see §4).
 > Auth was hardened beyond the original scope (email verification, refresh-token
 > rotation, password reset, rate limiting) and an **admin monitoring panel**
 > (daily traffic, unique visitors, signups via Redis aggregate counters) landed
@@ -638,9 +616,13 @@ Classification rules:
 > (`GET /api/links/:id/similar` + the Related section in `LinkDetailDrawer.jsx`).
 > The **"Public hosted launch" hardening layer has also shipped**
 > (see block below and §3.6), and it now has a real test suite and CI behind it
-> (`tests/`, `.github/workflows/ci.yml` — see §11). Remaining Phase 3 work is the
-> rest of the discovery surface: **topic explorer and search filters**, neither
-> built. Phase 4 (proactive resurface + weekly digest) follows.
+> (`tests/`, `.github/workflows/ci.yml` — see §11). **Phase 3 is now complete**:
+> the topic explorer (`GET /api/topics`, `TopicRail`) and the filter layer (tag,
+> type, date, source — on both the link list and semantic search) shipped last,
+> with tag grouping normalised on read in `api/utils/tags.py`. The Topics rail is
+> the only discovery *control* in the UI: it is scoped to the active queue tab, so
+> its counts are the tab's counts. Phase 4 (proactive resurface + weekly digest)
+> is next.
 
 ### Phase 1 — Core pipeline ✅ shipped
 **Goal**: A working end-to-end system. Submit a link, get it classified and queued.
@@ -652,9 +634,8 @@ Classification rules:
 - [x] AI agent: content fetch + classify + summarise — five providers behind one interface, not Claude-only
 - [x] pgvector setup + embedding generation (migration `0012_link_embedding`; landed with Phase 3)
 - [x] Basic web UI: link submission input + queue list view
-- [x] Telegram bot: receive URL → submit to API → reply with summary — built, but **off by default** (`TELEGRAM_ENABLED=false`, `telegram` Compose profile)
 
-**Milestone**: User can paste a link on the web or forward it on Telegram, and see it appear in the correct queue with a summary within 30 seconds.
+**Milestone**: User can paste a link on the web and see it appear in the correct queue with a summary within 30 seconds.
 
 ---
 
@@ -677,7 +658,7 @@ user saves what they want via `POST /api/links`.
 
 ---
 
-### Phase 3 — Semantic search & topic explorer 🚧 partly shipped
+### Phase 3 — Semantic search & topic explorer ✅ shipped
 **Goal**: Make the saved library discoverable and connected. **Foundation step:
 generate an embedding per link at save time — the substrate for search,
 similar-items, dedup, and clustering. Shipped** (local fastembed model, stored on
@@ -687,21 +668,50 @@ similar-items, dedup, and clustering. Shipped** (local fastembed model, stored o
 - [x] Natural language search endpoint with embedding-based ranking (`GET /api/links/search`)
 - [x] Search UI — semantic search box in `LinksView` (`api.searchLinks`, debounced)
 - [x] Similar items panel on each link detail view (`GET /api/links/:id/similar` + Related section in `LinkDetailDrawer.jsx`)
-- [ ] Topic cluster view (⭐ next — group by `ai_tags`, show counts; `GET /api/topics`)
-- [ ] Search filters (type, queue, date, source)
+- [x] Topic cluster view (`GET /api/topics` + `TopicsFilter` in `LinksView` — `ai_tags` grouped by normalised key, with counts, scoped to the active queue tab via `?queue=`; multi-select chips combined by Any/All)
+- [x] Search filters (tag, type, date, source) on both `GET /api/links` and `GET /api/links/search` — server-side; the only one with a UI control is `tag`, driven by the Topics rail
 
 > Note: search ranks by cosine similarity over stored embeddings via a linear scan
 > per user — no IVFFlat index yet. Fine at MVP scale; add the index when per-user
 > libraries grow large.
+>
+> Note: topics are **derived on read**, nothing is stored. Tags reach the DB in
+> whatever spelling the model or the user chose, so `api/utils/tags.py` holds the
+> grouping key (`normalise_tag`) and its exact SQL twin (`tag_key_sql`) — one
+> groups, the other resolves `?tag=`, and a divergence means a topic chip showing
+> 7 opens a list of 4. Because the predicate is over a *normalised* element, a GIN
+> index on raw `ai_tags` cannot serve it; the filter is a scan of one user's
+> library, bounded by `MAX_LINKS_PER_USER`. Revisit with an IMMUTABLE normalising
+> function plus a GIN expression index if per-user libraries grow.
+>
+> Note: topic selection is multiple, not single. `?tag=` is repeatable and
+> `?tag_logic=any|all` chooses union or intersection, both resolved in SQL —
+> filtering an already-ranked page client-side would turn "top 30, 3 of them
+> tagged rust" into a 3-result view. The UI exposes the switch because neither
+> logic subsumes the other; the panel also folds away, so readers who never
+> filter don't pay for the chip tail on every list.
+>
+> Note: the panel is scoped to the tab. `GET /api/topics?queue=` runs the caller's
+> selection through `apply_queue_scope` in `api/utils/link_query.py` — the same
+> helper `GET /api/links` uses — so a chip's count is precisely how many links the
+> list below will show once it is clicked. A single explicit filter strip
+> (type/date/source selects) was built and then removed: three controls that each
+> restate what a topic chip already does, competing with it for the same row of
+> screen. The params survive server-side as the plumbing under `?tag=` and
+> filter-before-rank.
+>
+> Note: filters are applied **before** ranking in `GET /api/links/search`. Ranking
+> first and filtering the page afterwards turns "top 30 matches, 3 of them tagged
+> rust" into a 3-result search that hides the rest of the library's rust links.
 
 **Milestone**: User can type "that article about Go concurrency" into search and find it instantly, even without remembering the title.
 
 ---
 
 ### Phase 4 — Proactive agent & digest (after Phase 3)
-**Goal**: The system becomes an active partner, not a passive archive. `worker/
-daily_digest.py` is already scaffolded; the work is AI-ranking the backlog to
-resurface forgotten-but-relevant items.
+**Goal**: The system becomes an active partner, not a passive archive. The work
+is AI-ranking the backlog to resurface forgotten-but-relevant items, delivered
+in-app (the old Telegram-only digest job was removed with the bot).
 
 - [ ] Daily background job per user (BullMQ delayed jobs)
 - [ ] Stale item nudge (14-day resurface)
@@ -818,7 +828,7 @@ have no wheels for 3.13.
 
 The following features are explicitly deferred to future versions to keep v1 focused. Note: running as a **public multi-tenant hosted service** is now an active direction (§3.6) — but that means many independent single-user tenants, *not* the shared/team features below (team workspaces, collaboration, public developer API remain out of scope).
 
-- Native mobile apps (iOS/Android) — Telegram bot covers mobile use case
+- Native mobile apps (iOS/Android) — the responsive web app covers mobile for now
 - Social features (sharing collections, following other users)
 - Browser reading mode / distraction-free reader view
 - Highlights and annotations within articles
@@ -827,4 +837,4 @@ The following features are explicitly deferred to future versions to keep v1 foc
 - Zapier / Make.com integrations
 - Multi-workspace / team accounts
 - AI-generated podcast audio of weekly digest
-- Chrome extension (Phase 1 uses Telegram + web paste; extension added later)
+- Chrome extension (Phase 1 uses web paste; extension added later)

@@ -21,11 +21,6 @@ _cron_jobs = [
     cron(backfill_embeddings, hour=set(range(24)), minute=30),
 ]
 
-if settings.TELEGRAM_ENABLED:
-    from worker.daily_digest import send_daily_digest
-    _functions.append(send_daily_digest)
-    _cron_jobs.append(cron(send_daily_digest, hour={9}, minute=0))  # Daily at 9:00 UTC
-
 
 async def _on_startup(ctx) -> None:
     # Warm the embedding model before jobs run so the first embed_link doesn't

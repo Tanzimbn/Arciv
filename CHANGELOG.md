@@ -83,6 +83,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unknown `ai_provider` values now raise instead of silently falling back to
   Gemini, which turned a typo into a confusing wrong-credentials error.
 
+### Removed
+- **The Telegram integration is gone.** It never shipped enabled
+  (`TELEGRAM_ENABLED` defaulted to false), no account was ever linked, and it has
+  been dropped from the roadmap rather than paused. Deleted: `bot/`,
+  `api/routers/telegram.py`, `api/schemas/telegram.py`, `worker/daily_digest.py`,
+  the `TELEGRAM_*` settings, the `bot` Compose service in both stacks, the Render
+  env entry, the `python-telegram-bot` dependency, the Settings panel and its
+  notification toggle. Migration `0016_drop_telegram` drops the four `users`
+  columns (`telegram_chat_id`, `telegram_link_token`,
+  `telegram_link_token_expires_at`, `feed_notify_telegram`) — every one was
+  unread and unpopulated, so no user data is affected. Feed and digest
+  notifications remain, in-app.
+
 ### Security
 - The Ollama provider's `base_url` is the user's stored `ai_api_key`, so all three
   of its requests (`/api/chat` × 2, `/api/tags`) now go through
@@ -135,16 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Notifications**
   - In-app notification bell with unread count
   - Notification panel with mark all read functionality
-  - Telegram bot integration for daily digests
-  - Save links by forwarding to Telegram bot
   - Configurable notification preferences
-
-- **Telegram Bot**
-  - Secure token-based account linking
-  - URL submission via message forwarding
-  - Daily digest messages with new feed items
-  - Bot commands (/start, /help)
-  - Error handling and user feedback
 
 - **User Interface**
   - Clean, minimalist design with Tailwind CSS
@@ -169,7 +173,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - User-scoped database queries
   - Encrypted API key storage
   - Input validation and URL canonicalization
-  - Telegram webhook validation
 
 ### Technical Details
 - **Backend**: Python 3.11+, FastAPI, SQLAlchemy, Alembic
@@ -177,7 +180,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Queue**: Redis 7+ with ARQ job processing
 - **Frontend**: React 18+, Vite, Tailwind CSS
 - **AI SDK**: Unified interface supporting multiple providers
-- **Bot**: python-telegram-bot with webhook support
 - **Deployment**: Docker Compose with health checks
 
 ### Performance

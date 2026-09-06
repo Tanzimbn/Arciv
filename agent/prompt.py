@@ -33,7 +33,11 @@ Title: {title or "Unknown"}
 Description: {description or "No description available"}
 
 Return JSON matching this schema exactly:
-{_SCHEMA}"""
+{_SCHEMA}
+
+Tags: 2-5 lowercase hyphen-separated topic names ("react-native", "vector-search").
+Name the subject, not the format. Reuse the obvious common name for a topic rather
+than inventing a variant, so the same subject gets the same tag across links."""
 
 
 def build_combined_prompt(title: str, description: str, url: str) -> str:

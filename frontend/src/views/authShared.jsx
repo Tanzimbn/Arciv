@@ -59,12 +59,6 @@ export const SentMail = (p) => (
     <rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="m3.5 7 8.5 6 8.5-6" />
   </svg>
 );
-const ArcivLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 18h16M7 18 12 6l5 12M9.5 14h5" />
-  </svg>
-);
-
 // Shared two-pane shell. `onSignIn` returns to the login screen; `footNote`
 // is the small mono line under the brand pane.
 export function AuthLayout({ children, onSignIn, footNote = "Reset links expire after 1 hour" }) {
@@ -72,7 +66,6 @@ export function AuthLayout({ children, onSignIn, footNote = "Reset links expire 
     <div className="auth-page">
       <aside className="left">
         <button className="brand" onClick={onSignIn} type="button">
-          <div className="brand-mark"><ArcivLogo /></div>
           <span className="brand-name">arciv<em>.</em></span>
         </button>
 

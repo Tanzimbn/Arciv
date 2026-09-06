@@ -48,6 +48,28 @@ async function rawRequest(method, path, body, token) {
   return res;
 }
 
+// Endpoints that carry no access token: a 401 from one of these is a real
+// credential failure, so refreshing and retrying it is pointless. Every other
+// route — `/auth/me` and `/auth/logout` included, since both send the bearer —
+// must go through refresh on a 401.
+//
+// This used to be a `path.startsWith("/auth/")` test, which swept `/auth/me` in
+// with the unauthenticated routes. With an expired access token, the dashboard's
+// `Promise.all([getLinks, getLinks, getMe, getSettings])` then had `getMe` throw
+// 401 while the two `getLinks` beside it refreshed and succeeded — so the whole
+// `Promise.all` rejected, the catch swallowed it, and the page rendered its empty
+// state until a manual reload (which worked, because the refresh had already
+// stored new tokens).
+const NO_REFRESH_PATHS = new Set([
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/verify-email",
+  "/auth/resend-verification",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+]);
+
 // Single-flight refresh so concurrent 401s don't all hit /refresh.
 let refreshing = null;
 
@@ -72,10 +94,11 @@ async function tryRefresh() {
 }
 
 async function request(method, path, body) {
+  const refreshable = !NO_REFRESH_PATHS.has(path.split("?")[0]);
   let res = await rawRequest(method, path, body, getToken());
 
   // Access token expired? Refresh once and retry.
-  if (res.status === 401 && getRefreshToken() && !path.startsWith("/auth/")) {
+  if (res.status === 401 && refreshable && getRefreshToken()) {
     if (await tryRefresh()) {
       res = await rawRequest(method, path, body, getToken());
     }
@@ -84,15 +107,34 @@ async function request(method, path, body) {
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // 401 after a refresh attempt (or on an auth route) means the session is
-    // dead — clear tokens and bounce to login.
-    if (res.status === 401 && !path.startsWith("/auth/")) {
+    // 401 after a refresh attempt (or on an unauthenticated route) means the
+    // session is dead — clear tokens and bounce to login.
+    if (res.status === 401 && refreshable) {
       clearTokens();
       window.location.reload();
     }
     throw { status: res.status, data };
   }
   return data;
+}
+
+// Build a query string, expanding arrays into repeated keys — `?tag=a&tag=b`,
+// which is how FastAPI reads a `list[str]` param. Object.fromEntries + a plain
+// URLSearchParams would stringify the array to "a,b" and the server would treat
+// that as one topic key named "a,b", matching nothing.
+function qs(params) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v == null || v === "") continue;
+    if (Array.isArray(v)) {
+      // An empty array means "no filter", not "filter by nothing".
+      for (const item of v) if (item != null && item !== "") sp.append(k, String(item));
+    } else {
+      sp.append(k, String(v));
+    }
+  }
+  const out = sp.toString();
+  return out ? "?" + out : "";
 }
 
 // In-memory cache for semantic search responses, scoped to this page load. The
@@ -162,24 +204,34 @@ export const api = {
       : Promise.resolve();
   },
 
-  searchLinks: async (query, limit = 30) => {
-    const key = `${limit}:${query}`;
+  // `filters` accepts tag / content_type / domain / since / until, same names and
+  // meaning as GET /api/links. They go into the cache key: without that, a
+  // filtered search would be served the cached unfiltered result set.
+  searchLinks: async (query, filters = {}, limit = 30) => {
+    // Filters are part of the cache key: without them a filtered search would be
+    // served the cached unfiltered result set. Tag arrays are sorted into the key
+    // so picking the same two topics in the other order is one cache entry, and
+    // JSON.stringify keeps ["a","b"] distinct from ["a,b"].
+    const active = Object.entries(filters)
+      .filter(([, v]) => v != null && v !== "" && (!Array.isArray(v) || v.length))
+      .map(([k, v]) => [k, Array.isArray(v) ? [...v].sort() : v])
+      .sort(([a], [b]) => a.localeCompare(b));
+    const key = `${limit}:${query}:${JSON.stringify(active)}`;
     const hit = searchCache.get(key);
     if (hit && hit.expires > Date.now()) return hit.data;
     const data = await request(
       "GET",
-      `/links/search?q=${encodeURIComponent(query)}&limit=${limit}`
+      `/links/search${qs({ q: query, limit, ...Object.fromEntries(active) })}`
     );
     searchCache.set(key, { expires: Date.now() + SEARCH_CACHE_TTL, data });
     return data;
   },
 
-  getLinks: (params = {}) => {
-    const qs = new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
-    ).toString();
-    return request("GET", `/links${qs ? "?" + qs : ""}`);
-  },
+  // Topics are derived from ai_tags on read, so this is re-fetched after any
+  // mutation that can change tags rather than cached.
+  getTopics: (params = {}) => request("GET", `/topics${qs(params)}`),
+
+  getLinks: (params = {}) => request("GET", `/links${qs(params)}`),
 
   createLink: async (url) => {
     const r = await request("POST", "/links", { url });
@@ -237,7 +289,6 @@ export const api = {
   readNotification: (id) => request("POST", `/notifications/${id}/read`),
   readAllNotifications: () => request("POST", "/notifications/read-all"),
 
-  generateTelegramToken: () => request("POST", "/telegram/link-token"),
 
   adminListUsers: () => request("GET", "/admin/users"),
   adminDeleteUser: (id) => request("DELETE", `/admin/users/${id}`),

@@ -80,16 +80,6 @@ services:
         condition: service_started
     command: python -m arq worker.worker.WorkerSettings
 
-  bot:
-    build: .
-    env_file: .env
-    restart: unless-stopped
-    profiles: ["telegram"]
-    depends_on:
-      api:
-        condition: service_healthy
-    command: python bot/main.py
-
   nginx:
     image: nginx:alpine
     ports:

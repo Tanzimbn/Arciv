@@ -103,16 +103,16 @@ export default function NotificationBell() {
       {/* ── Bell button ── */}
       <button
         onClick={handleToggle}
-        style={{ position: "relative", width: 36, height: 36, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 8, cursor: "pointer", color: "var(--muted)" }}
-        onMouseEnter={e => e.currentTarget.style.background = "rgba(31,28,21,.05)"}
-        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        style={{ position: "relative", width: 36, height: 36, display: "grid", placeItems: "center", border: 0, background: "transparent", borderRadius: 8, cursor: "pointer", color: "var(--muted)", transition: "background .15s, color .15s" }}
+        onMouseEnter={e => { e.currentTarget.style.background = "var(--accent-tint)"; e.currentTarget.style.color = "var(--accent)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}
       >
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
             d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
         </svg>
         {unreadCount > 0 && (
-          <span style={{ position: "absolute", top: 5, right: 5, minWidth: 14, height: 14, padding: "0 3px", background: "var(--accent)", color: "#fff", fontSize: 7, fontWeight: 700, borderRadius: 99, display: "grid", placeItems: "center", border: "2px solid var(--bg)" }}>
+          <span style={{ position: "absolute", top: 5, right: 5, minWidth: 14, height: 14, padding: "0 3px", background: "var(--accent)", color: "var(--accent-ink)", fontSize: 7, fontWeight: 700, borderRadius: 99, display: "grid", placeItems: "center", border: "2px solid var(--bg)" }}>
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -156,7 +156,7 @@ export default function NotificationBell() {
                         {postCount} post{postCount !== 1 ? "s" : ""} — click to view
                       </p>
                     )}
-                    <p style={{ fontSize: 11, color: "var(--muted-2)", margin: "4px 0 0", fontFamily: "monospace" }}>{formatTime(n.created_at)}</p>
+                    <p style={{ fontSize: 11, color: "var(--muted-2)", margin: "4px 0 0", fontFamily: "var(--font-mono)" }}>{formatTime(n.created_at)}</p>
                   </div>
                   {!n.is_read && <div style={{ width: 7, height: 7, borderRadius: 99, background: "var(--accent)", flexShrink: 0, marginTop: 5 }} />}
                 </div>
