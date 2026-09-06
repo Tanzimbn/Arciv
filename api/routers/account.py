@@ -85,7 +85,6 @@ async def export_account(
             "ai_model": current_user.ai_model,
             "ai_key_configured": current_user.ai_api_key_enc is not None,
             "email_verified": current_user.email_verified,
-            "feed_notify_telegram": current_user.feed_notify_telegram,
             "feed_notify_inapp": current_user.feed_notify_inapp,
             "created_at": _coerce(current_user.created_at),
         },

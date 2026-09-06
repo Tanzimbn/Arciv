@@ -289,7 +289,6 @@ export const api = {
   readNotification: (id) => request("POST", `/notifications/${id}/read`),
   readAllNotifications: () => request("POST", "/notifications/read-all"),
 
-  generateTelegramToken: () => request("POST", "/telegram/link-token"),
 
   adminListUsers: () => request("GET", "/admin/users"),
   adminDeleteUser: (id) => request("DELETE", `/admin/users/${id}`),

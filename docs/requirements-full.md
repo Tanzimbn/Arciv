@@ -16,7 +16,6 @@
    - 2.6 [Proactive Agent](#26-proactive-agent)
    - 2.7 [Knowledge Digest](#27-knowledge-digest)
    - 2.8 [Web UI](#28-web-ui)
-   - 2.9 [Telegram Bot](#29-telegram-bot)
 3. [Non-Functional Requirements](#3-non-functional-requirements)
    - 3.1 [Performance](#31-performance)
    - 3.2 [Scalability](#32-scalability)
@@ -43,7 +42,7 @@
 
 ### Problem Statement
 
-People save links constantly — from browsers, Telegram, newsletters, RSS feeds — but they never build into a usable knowledge base. Existing tools (Raindrop.io, Readwise Reader, Pocket) require manual tagging, are closed-source, and don't understand *what you should do* with a link or *when* to surface it again. Pocket shut down in July 2025 and Omnivore shut down in November 2024, leaving a significant gap for an open-source alternative.
+People save links constantly — from browsers, newsletters, RSS feeds — but they never build into a usable knowledge base. Existing tools (Raindrop.io, Readwise Reader, Pocket) require manual tagging, are closed-source, and don't understand *what you should do* with a link or *when* to surface it again. Pocket shut down in July 2025 and Omnivore shut down in November 2024, leaving a significant gap for an open-source alternative.
 
 ### Solution
 
@@ -74,8 +73,6 @@ Arciv is a self-hostable web application where:
 **FR-P-01**: Users must be able to submit a URL via the web app by pasting into an input field.
 
 **FR-P-02**: Users must be able to submit a URL via a browser extension (Chrome/Firefox) with a single click.
-
-**FR-P-03**: Users must be able to submit a URL via the Telegram bot by forwarding a shared link from any mobile browser.
 
 **FR-P-04**: Users must be able to submit a URL via a REST API (`POST /api/links`) for third-party integrations.
 
@@ -229,18 +226,6 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 ---
 
-### 2.9 Telegram Bot
-
-**FR-T-01**: Users must be able to link their Telegram account to their Arciv account via a one-time token flow from the Settings page.
-
-**FR-T-02**: Once linked, forwarding any message containing a URL to the bot must submit that URL to the user's Arciv account via the push flow.
-
-**FR-T-03**: The bot must reply with a confirmation message containing: the detected content type, assigned queue, and a 1-sentence summary — within 30 seconds of submission.
-
-**FR-T-04**: The bot must handle the case where a message contains multiple URLs — each URL must be submitted as a separate item.
-
----
-
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
@@ -288,8 +273,6 @@ All nudges must be dismissable and configurable — users must be able to disabl
 **NFR-SEC-02**: User data must be strictly isolated — queries must always be scoped to the authenticated user's `user_id`; no cross-user data access is permitted.
 
 **NFR-SEC-03**: User-supplied LLM API keys (BYOK) are stored **encrypted at rest** (AES-256 via `ENCRYPTION_KEY`), never returned to the client (masked only), and never committed to version control. An optional operator-level shared key may live in env for the free tier. *(Superseded the original env-only rule once per-user BYOK landed.)*
-
-**NFR-SEC-04**: The Telegram bot webhook must validate the `X-Telegram-Bot-Api-Secret-Token` header on every incoming request.
 
 **NFR-SEC-05**: URL submissions must be validated against a blocklist of known malicious domains (using a community-maintained list) before processing.
 
@@ -349,7 +332,6 @@ Requirements specific to running Arciv as a **public, multi-tenant hosted servic
 | Frontend | React + Vite + TailwindCSS | SPA, fast build, utility-first styling |
 | Feed parsing | `feedparser` (Python) | Handles RSS 1.0, RSS 2.0, Atom |
 | HTML scraping | `httpx` + `beautifulsoup4` | Fetch page content + auto-discover feed URLs |
-| Telegram bot | `python-telegram-bot` | Async, webhook-compatible |
 | Containerisation | Docker + Docker Compose | Single-command self-hosting |
 | Database migrations | Alembic | Version-controlled schema changes |
 | Auth | JWT (via `python-jose`) + bcrypt passwords | Stateless, self-hosted friendly |
@@ -377,8 +359,6 @@ Arciv/
 ├── worker/               # BullMQ job consumers
 │   ├── link_worker.py    # Processes items from the shared queue
 │   └── feed_worker.py    # Polls RSS feeds on schedule
-├── bot/                  # Telegram bot
-│   └── handler.py        # Message handler → API bridge
 ├── db/
 │   └── migrations/       # Alembic migration files
 ├── frontend/             # React SPA
@@ -430,7 +410,6 @@ Cron job fires every 30 min
 | `id` | `uuid` PK | |
 | `email` | `varchar(255)` UNIQUE | |
 | `password_hash` | `varchar(255)` | bcrypt |
-| `telegram_chat_id` | `bigint` NULLABLE | linked Telegram account |
 | `llm_provider` | `varchar(50)` | `anthropic` \| `openai` \| `ollama` |
 | `llm_api_key_enc` | `text` NULLABLE | encrypted at rest |
 | `digest_enabled` | `boolean` | default true |
@@ -492,7 +471,6 @@ Cron job fires every 30 min
 |---|---|---|
 | `POST` | `/api/auth/register` | Create account |
 | `POST` | `/api/auth/login` | Returns JWT |
-| `POST` | `/api/auth/telegram/link` | Returns one-time Telegram link token |
 
 ### Links
 
@@ -656,9 +634,8 @@ Classification rules:
 - [x] AI agent: content fetch + classify + summarise — five providers behind one interface, not Claude-only
 - [x] pgvector setup + embedding generation (migration `0012_link_embedding`; landed with Phase 3)
 - [x] Basic web UI: link submission input + queue list view
-- [x] Telegram bot: receive URL → submit to API → reply with summary — built, but **off by default** (`TELEGRAM_ENABLED=false`, `telegram` Compose profile)
 
-**Milestone**: User can paste a link on the web or forward it on Telegram, and see it appear in the correct queue with a summary within 30 seconds.
+**Milestone**: User can paste a link on the web and see it appear in the correct queue with a summary within 30 seconds.
 
 ---
 
@@ -732,9 +709,9 @@ similar-items, dedup, and clustering. Shipped** (local fastembed model, stored o
 ---
 
 ### Phase 4 — Proactive agent & digest (after Phase 3)
-**Goal**: The system becomes an active partner, not a passive archive. `worker/
-daily_digest.py` is already scaffolded; the work is AI-ranking the backlog to
-resurface forgotten-but-relevant items.
+**Goal**: The system becomes an active partner, not a passive archive. The work
+is AI-ranking the backlog to resurface forgotten-but-relevant items, delivered
+in-app (the old Telegram-only digest job was removed with the bot).
 
 - [ ] Daily background job per user (BullMQ delayed jobs)
 - [ ] Stale item nudge (14-day resurface)
@@ -851,7 +828,7 @@ have no wheels for 3.13.
 
 The following features are explicitly deferred to future versions to keep v1 focused. Note: running as a **public multi-tenant hosted service** is now an active direction (§3.6) — but that means many independent single-user tenants, *not* the shared/team features below (team workspaces, collaboration, public developer API remain out of scope).
 
-- Native mobile apps (iOS/Android) — Telegram bot covers mobile use case
+- Native mobile apps (iOS/Android) — the responsive web app covers mobile for now
 - Social features (sharing collections, following other users)
 - Browser reading mode / distraction-free reader view
 - Highlights and annotations within articles
@@ -860,4 +837,4 @@ The following features are explicitly deferred to future versions to keep v1 foc
 - Zapier / Make.com integrations
 - Multi-workspace / team accounts
 - AI-generated podcast audio of weekly digest
-- Chrome extension (Phase 1 uses Telegram + web paste; extension added later)
+- Chrome extension (Phase 1 uses web paste; extension added later)

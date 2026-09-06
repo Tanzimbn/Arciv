@@ -1,5 +1,6 @@
 # Environment
 .env
+.env.backup.*
 *.env.local
 
 # Python
@@ -29,6 +30,9 @@ frontend/.vite/
 # IDE
 .idea/
 .vscode/
+
+# Local tool state — machine-specific, never shared
+.claude/settings.local.json
 *.swp
 *.swo
 .DS_Store

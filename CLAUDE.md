@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Arciv** is a self-hostable intelligent link and feed manager. Users save URLs manually or via RSS feeds; an AI pipeline classifies, summarises, and routes them into smart queues. All five MVP phases are scaffolded end-to-end (foundation, link saving, AI pipeline, feed tracker, notifications + Telegram bot). Code lives at project root; docs in `docs/`.
+**Arciv** is a self-hostable intelligent link and feed manager. Users save URLs manually or via RSS feeds; an AI pipeline classifies, summarises, and routes them into smart queues. All five MVP phases are scaffolded end-to-end (foundation, link saving, AI pipeline, feed tracker, notifications). Code lives at project root; docs in `docs/`.
 
 Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the full spec (`docs/requirements-full.md`).
 
@@ -22,7 +22,6 @@ Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the 
 | HTTP/scraping | `httpx` + `beautifulsoup4` |
 | Frontend | React + Vite + TailwindCSS (SPA) |
 | Auth | JWT (`python-jose`) + bcrypt |
-| Telegram bot | `python-telegram-bot` |
 | DB migrations | Alembic |
 | Containerisation | Docker + Docker Compose |
 
@@ -31,9 +30,9 @@ Continue hardening the MVP (`docs/requirements-mvp.md`), then extend toward the 
 ```
 arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 ├── api/                        # FastAPI application
-│   ├── routers/                # auth, links, feeds, notifications, settings, telegram
+│   ├── routers/                # auth, links, feeds, notifications, settings
 │   ├── models/                 # user, link, feed, notification, job
-│   ├── schemas/                # auth, link, feed, notification, settings, telegram
+│   ├── schemas/                # auth, link, feed, notification, settings
 │   ├── middleware/             # auth.py — JWT get_current_user
 │   ├── utils/                  # security (bcrypt), encryption (AES-256), heuristics,
 │   │                           # metadata fetch, feed_discovery
@@ -49,16 +48,14 @@ arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 ├── worker/                     # ARQ jobs
 │   ├── worker.py               # WorkerSettings — registers functions + cron jobs
 │   ├── ai_classify.py          # classify_link + sweep_failed_links
-│   ├── feed_poll.py            # poll_all_feeds + poll_single_feed
-│   └── daily_digest.py         # send_daily_digest cron
-├── bot/
-│   └── main.py                 # Telegram bot — long-polling, /start linking, URL submit
+│   └── feed_poll.py            # poll_all_feeds + poll_single_feed
 ├── db/
 │   └── migrations/
 │       ├── env.py              # Async Alembic env
 │       └── versions/           # 0001 users+links, 0002 jobs,
 │                               # 0003 feeds+notifications, 0004 telegram fields,
-│                               # 0005 timestamptz, 0006 feed_category
+│                               # 0005 timestamptz, 0006 feed_category,
+│                               # … 0015 ollama_cloud, 0016 drop_telegram
 ├── frontend/                   # React + Vite + Tailwind SPA
 │   └── src/
 │       ├── views/              # LoginView, LinksView, FeedsView, SettingsView
@@ -66,7 +63,7 @@ arciv/  (project root — /Users/tanzimbn/Documents/projects/Arciv/)
 │       │                       # SubpageNav
 │       └── api/client.js
 ├── alembic.ini
-├── docker-compose.yml          # db, redis, api, worker, bot
+├── docker-compose.yml          # db, redis, api, worker, embed, mailhog
 ├── Dockerfile
 ├── requirements.txt
 ├── .env.example
@@ -216,14 +213,15 @@ Each phase is wired up; ongoing work is hardening, edge cases, and polish.
 2. **Link saving** — `POST /api/links` (metadata fetch via `api/utils/metadata.py`, URL canonicalisation, dedup at DB level), list/patch/delete, retry-ai. Frontend `LinksView` with `QueueTabs` + `UrlInputBar` + `LinkCard`.
 3. **AI pipeline** — ARQ queue (`worker/worker.py`), five providers behind one interface, classify+summarise in a single LLM call, exponential backoff (2 min → 10 min → 1 hour → `failed`), hourly `sweep_failed_links` cron. Settings page (`/api/settings`, `/api/settings/ai/test`).
 4. **Feed tracker** — `feeds` + `feed_items` tables, RSS auto-discovery (`api/utils/feed_discovery.py`), daily cron poll driven by `FEED_POLL_CRON`, failure handling with consecutive-failure tracking. Feeds support an optional `category` field (String, nullable) for user-defined grouping — exposed in `FeedCreate`, `FeedUpdate`, `FeedResponse` schemas and `PATCH /api/feeds/:id`. **Feeds are notification-only, not auto-ingest** (deliberate deviation from `requirements-mvp.md:220`): subscribing seeds existing GUIDs into `feed_items` with `link_id=NULL` but creates no `Link` rows; the daily poll likewise records new GUIDs and emits a single grouped notification (title + URL per new post in `Notification.body`) without saving anything. The user manually saves any post they want via the existing `POST /api/links` flow. Do not reintroduce auto-Link creation from feeds.
-5. **Notifications + Telegram** — in-app notification bell, Telegram bot (`bot/main.py`) — token-based account linking, URL submission via DM, `send_daily_digest` cron at 09:00 UTC. **Telegram is currently disabled** by default: `TELEGRAM_ENABLED=false` skips the `/api/telegram/*` router registration in `api/main.py` and the digest cron in `worker/worker.py`, and the `bot` service is behind the `telegram` Compose profile (`docker compose --profile telegram up` to start it).
+5. **Notifications** — in-app notification bell with unread counter, fed by the feed poller and the AI-config alert path.
+
+**Telegram was removed from the product entirely.** It never shipped enabled and no account was ever linked, so the code, config, UI and schema are all gone: `bot/`, `api/routers/telegram.py`, `api/schemas/telegram.py`, `worker/daily_digest.py`, the `TELEGRAM_*` settings, the `bot` Compose service, the Settings panel, and the four `users` columns (dropped in `0016_drop_telegram`). Migrations `0001`/`0004`/`0005` still name those columns — that is immutable history, not a live feature. Do not reintroduce it.
 
 ## Key API Endpoints (MVP)
 
 ```
 POST   /api/auth/register
 POST   /api/auth/login
-POST   /api/auth/telegram/link
 
 POST   /api/links              # Save URL — returns fast, AI is async
 GET    /api/links              # ?queue=&status=&tag=(repeatable)&tag_logic=any|all&content_type=&domain=&since=&until=&page=&limit=
@@ -261,7 +259,7 @@ All config via `.env`; `.env.example` documents every variable. Current variable
 - `DATABASE_URL`, `REDIS_URL`
 - `SECRET_KEY` (JWT), `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`
 - `ENCRYPTION_KEY` (AES-256 for API keys at rest)
-- `TELEGRAM_BOT_TOKEN`, `SHARED_GEMINI_KEY`
+- `SHARED_GEMINI_KEY`
 - `FEED_POLL_CRON` (default `0 8 * * *` — parsed in `worker/worker.py`; only minute and hour fields are honored)
 - `ENVIRONMENT`
 
@@ -283,6 +281,13 @@ ruff check .
 pytest                                    # integration layer skips if services are down
 TEST_DATABASE_URL=… TEST_REDIS_URL=… pytest   # full run
 ```
+
+`Makefile` wraps these: `make venv`, `make test-unit`, `make test` (which brings
+up `docker-compose.test.yml` — throwaway pgvector + Redis on 55432/56379 — first),
+`make lint`. Local setup is `./scripts/bootstrap-env.sh` (`make setup`) then
+`make up`; `.env.example` defaults point SMTP at the bundled MailHog on :8025,
+because login requires a verified email and there is no other way to get the link
+without reading the worker log.
 
 Rules when adding tests:
 

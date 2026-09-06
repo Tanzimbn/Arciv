@@ -75,10 +75,6 @@ app.include_router(account.router, prefix="/api/account", tags=["account"])
 app.include_router(config.router, prefix="/api/config", tags=["config"])
 app.include_router(topics.router, prefix="/api/topics", tags=["topics"])
 
-if settings.TELEGRAM_ENABLED:
-    from api.routers import telegram
-
-    app.include_router(telegram.router, prefix="/api/telegram", tags=["telegram"])
 
 
 @app.get("/health")

@@ -42,9 +42,7 @@ def _build_response(user: User) -> SettingsResponse:
         ai_provider=user.ai_provider,
         ai_model=user.ai_model,
         ai_api_key_masked=masked,
-        feed_notify_telegram=user.feed_notify_telegram,
         feed_notify_inapp=user.feed_notify_inapp,
-        telegram_enabled=settings.TELEGRAM_ENABLED,
         shared_ai_available=bool(settings.SHARED_GEMINI_KEY),
     )
 
@@ -115,8 +113,6 @@ async def update_settings(
             current_user.ai_api_key_enc = None
         else:
             current_user.ai_api_key_enc = encrypt_secret(body.ai_api_key)
-    if body.feed_notify_telegram is not None:
-        current_user.feed_notify_telegram = body.feed_notify_telegram
     if body.feed_notify_inapp is not None:
         current_user.feed_notify_inapp = body.feed_notify_inapp
 

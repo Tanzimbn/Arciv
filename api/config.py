@@ -53,8 +53,6 @@ class Settings(BaseSettings):
     # appended automatically, so prod usually needs nothing extra here.
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:8000"
 
-    TELEGRAM_ENABLED: bool = False
-    TELEGRAM_BOT_TOKEN: str = ""
     SHARED_GEMINI_KEY: str = ""
     FEED_POLL_CRON: str = "0 8 * * *"
 
