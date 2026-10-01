@@ -250,7 +250,7 @@ All nudges must be dismissable and configurable — users must be able to disabl
 
 **NFR-SCALE-03**: The database schema must support multi-user operation from day one (all tables scoped by `user_id`), even if the initial deployment is single-user.
 
-**NFR-SCALE-04**: Vector similarity search (pgvector) must remain under 500ms for up to 50,000 vectors per user with an IVFFlat index.
+**NFR-SCALE-04**: Vector similarity search (pgvector) must remain under 500ms for up to 50,000 vectors per user. Shipped with an **HNSW** index, not the IVFFlat this originally named.
 
 ---
 
@@ -671,9 +671,13 @@ similar-items, dedup, and clustering. Shipped** (local fastembed model, stored o
 - [x] Topic cluster view (`GET /api/topics` + `TopicsFilter` in `LinksView` — `ai_tags` grouped by normalised key, with counts, scoped to the active queue tab via `?queue=`; multi-select chips combined by Any/All)
 - [x] Search filters (tag, type, date, source) on both `GET /api/links` and `GET /api/links/search` — server-side; the only one with a UI control is `tag`, driven by the Topics rail
 
-> Note: search ranks by cosine similarity over stored embeddings via a linear scan
-> per user — no IVFFlat index yet. Fine at MVP scale; add the index when per-user
-> libraries grow large.
+> Note: search ranks by cosine similarity over stored embeddings. An **HNSW**
+> index has existed since `0012_link_embedding` (`idx_links_embedding_hnsw`,
+> cosine ops) — the earlier note here claiming no index was wrong. HNSW rather
+> than IVFFlat because it needs no training pass, so it is correct while rows
+> are still being embedded. Whether the planner chooses it under the `user_id`
+> filter is unmeasured; check with EXPLAIN against a large library before
+> concluding anything about scan behaviour.
 >
 > Note: topics are **derived on read**, nothing is stored. Tags reach the DB in
 > whatever spelling the model or the user chose, so `api/utils/tags.py` holds the
