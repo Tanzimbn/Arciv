@@ -1,5 +1,7 @@
-version: '3.8'
-
+# Production stack. Unlike docker-compose.yml, NOTHING here publishes a port
+# except nginx: db, redis, embed, api and worker talk over the compose network
+# only, so the datastores are unreachable from outside the host. Do not add a
+# `ports:` entry to them to "check something" — use `docker compose exec`.
 services:
   db:
     # pgvector image = Postgres 16 + the `vector` extension (embeddings /
@@ -7,7 +9,9 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-arciv}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # No default: an unset password silently became the empty string, which
+      # is a confusing entrypoint failure at best. Fail with the reason instead.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-arciv}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -80,16 +84,6 @@ services:
         condition: service_started
     command: python -m arq worker.worker.WorkerSettings
 
-  bot:
-    build: .
-    env_file: .env
-    restart: unless-stopped
-    profiles: ["telegram"]
-    depends_on:
-      api:
-        condition: service_healthy
-    command: python bot/main.py
-
   nginx:
     image: nginx:alpine
     ports:
@@ -100,7 +94,11 @@ services:
       - ./ssl:/etc/nginx/ssl:ro
     restart: unless-stopped
     depends_on:
-      - api
+      # `- api` only waits for the container to exist. The api runs `alembic
+      # upgrade head` before uvicorn binds, so nginx would answer 502 for the
+      # whole migration window on every deploy.
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -4,75 +4,144 @@
 
 /* ── Arciv design system — warm cream palette ───────────────── */
 :root {
-  --bg: #efe7d8;
-  --nav: #f6f0e3;
-  --surface: #fbf7ee;
-  --surface-2: #f3ecdc;
-  --ink: #1f1c15;
-  --ink-2: #423d31;
-  --muted: #847e6e;
-  --muted-2: #ada593;
-  --line: rgba(31,28,21,.10);
-  --line-2: rgba(31,28,21,.05);
+  /* Brown paper, not white. Successive passes took the card from 93% relative
+     luminance to 88%, which was still off-white; it now sits at 78% with the
+     page at 65% and the hue pulled toward red-brown rather than yellow-cream.
+     A mid-tone ground leaves less luminance range for text, which is why the
+     four ink tiers below are packed closer than they were — each is still
+     solved against BOTH the card and the page at 4.5:1. */
+  --bg: #e0d1b9;
+  --nav: #e9dcc7;
+  --surface: #eee3d1;
+  --surface-2: #e2d5bd;
+  /* Four text tiers, each >=4.5:1 on BOTH card and page. The old --muted
+     (3.78:1) and --muted-2 (2.29:1) failed WCAG AA, and they carry most of the
+     small text in this UI: counts, labels, timestamps, placeholders. */
+  --ink: #191610;      /* 14.2:1 card · 12.0:1 page */
+  --ink-2: #3d382c;    /*  9.2 · 7.8 */
+  --muted: #565045;    /*  6.3 · 5.3 */
+  --muted-2: #615a4d;  /*  5.4 · 4.6 */
+  --line: rgba(25,22,16,.14);
+  --line-2: rgba(25,22,16,.07);
 
-  --accent: #6d3aff;
+  --accent: #5a2ce8;
   --accent-deep: #4a1fc7;
-  --accent-tint: #f1ebff;
-  --accent-tint-2: #ebe2ff;
+  /* Tints are mixed INTO the surface rather than toward white: a pale lilac
+     wash that looked right on off-white read as a white patch once the ground
+     went brown. Mixing against --surface keeps every tint on the same paper. */
+  --accent-tint: color-mix(in oklab, var(--accent) 13%, var(--surface));
+  --accent-tint-2: color-mix(in oklab, var(--accent) 24%, var(--surface));
   --accent-ink: #ffffff;
+  /* Ink for text sitting on a saturated fill (accent, try, bad, read…).
+     Dark mode lightens those hues, so white on them falls to ~2:1. */
+  --on-color: #ffffff;
 
-  --read: #ff6b3d;
-  --read-tint: #fff1eb;
-  --watch: #2a6fdb;
-  --watch-tint: #e9f0fc;
-  --try: #14a974;
-  --try-tint: #e6f6ee;
-  --inbox: #b18800;
-  --inbox-tint: #fbf3d9;
-  --archive: #6b6964;
-  --archive-tint: #efeeea;
+  /* Queue hues, solved until each is legible AS TEXT on both grounds — they
+     label cards, not just dot them. Hue held, lightness lowered. */
+  --read: #9d3b17;
+  --read-tint: color-mix(in oklab, var(--read) 14%, var(--surface));
+  --watch: #1c57b4;
+  --watch-tint: color-mix(in oklab, var(--watch) 14%, var(--surface));
+  --try: #0a6847;
+  --try-tint: color-mix(in oklab, var(--try) 14%, var(--surface));
+  --inbox: #735607;
+  --inbox-tint: color-mix(in oklab, var(--inbox) 15%, var(--surface));
+  --archive: #5e5b56;
+  --archive-tint: color-mix(in oklab, var(--archive) 12%, var(--surface));
 
-  --good: #14a974;
-  --good-tint: #e6f6ee;
-  --warn: #b18800;
-  --warn-tint: #fbf3d9;
-  --bad: #cc3a3a;
-  --bad-tint: #fbe8e8;
+  --good: #0a6847;
+  --good-tint: color-mix(in oklab, var(--good) 14%, var(--surface));
+  --warn: #735607;
+  --warn-tint: color-mix(in oklab, var(--warn) 15%, var(--surface));
+  --bad: #aa2c2c;
+  --bad-tint: color-mix(in oklab, var(--bad) 13%, var(--surface));
 
-  --shadow-card: 0 1px 0 rgba(22,21,19,.04), 0 1px 2px rgba(22,21,19,.04);
+  --shadow-card: 0 1px 0 rgba(25,22,16,.05), 0 1px 2px rgba(25,22,16,.05);
   --shadow-pop: 0 1px 0 rgba(22,21,19,.04), 0 12px 32px -8px rgba(22,21,19,.18), 0 4px 12px -4px rgba(22,21,19,.08);
 
   /* Always-dark button — does not invert in dark mode */
+  /* Type. Three roles, three families, each doing what the others can't:
+     Manrope for interface text — a semi-geometric grotesque with open
+     apertures that hold at 12px, and unambiguous numerals, which is most of
+     what this UI shows. Newsreader for display — an editorial serif built for
+     screen reading, with a real optical-size axis and weights 400–600, where
+     the previous Instrument Serif had one weight and hairline serifs that went
+     fragile at 28px and thinner still in dark mode. Geist Mono for data —
+     `ui-monospace` resolved to a different face on every OS, so counts and
+     timestamps looked like a different design per platform. */
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --btn-dark: #1f1c15;
   --btn-dark-hover: #000000;
   --btn-dark-text: #ffffff;
 }
 
-html.dark { background: #0e0d0c; }
+html.dark { background: #14120f; }
 
 body.dark {
-  --btn-dark: #0e0d0c;
-  --btn-dark-hover: #000000;
-  --bg: #0e0d0c;
-  --nav: #161410;
-  --surface: #191815;
-  --surface-2: #1f1d1a;
-  --ink: #f5f3ee;
-  --ink-2: #d6d2c8;
-  --muted: #878379;
-  --muted-2: #5a5751;
-  --line: rgba(245,243,238,.08);
-  --line-2: rgba(245,243,238,.05);
-  --accent-tint: #251a40;
-  --accent-tint-2: #321f5c;
-  --read-tint: rgba(255,107,61,.12);
-  --watch-tint: rgba(42,111,219,.14);
-  --try-tint: rgba(20,169,116,.14);
-  --inbox-tint: rgba(177,136,0,.16);
-  --archive-tint: rgba(245,243,238,.07);
-  --good-tint: rgba(20,169,116,.14);
-  --warn-tint: rgba(177,136,0,.16);
-  --bad-tint: rgba(204,58,58,.12);
+  /* The emphasis pill INVERTS in dark mode. It was #0e0d0c on a #0e0d0c page —
+     ratio 1.00 — so the selected queue tab, the Any/All switch and the
+     grid/list toggle rendered as holes rather than highlights. Dark themes put
+     light on dark for emphasis, the same way light themes put dark on light. */
+  --btn-dark: #eae4d7;
+  --btn-dark-hover: #ffffff;
+  --btn-dark-text: #14120f;
+  /* Layered darkness, not flat black: #0e0d0c was 0.4% luminance (near pure
+     black, which causes halation against light text) and sat 1.09:1 from the
+     card surface, so elevation was invisible. Three distinct steps now. */
+  --bg: #14120f;
+  --nav: #1b1814;
+  --surface: #221f1a;
+  /* 1.11:1 from the card, i.e. the domain pill and the ⌘V hint were shapes you
+     could only find by their border. 1.30 puts them in the same visible band
+     as the queue chips; --ink-2 on it is still 8.7:1. */
+  --surface-2: #38322a;
+  --ink: #f2efe8;      /* off-white, not #fff — less halation */
+  --ink-2: #dad5ca;
+  --muted: #b3ab9c;    /* was #878379 */
+  --muted-2: #8e8779;  /* was #5a5751 at 2.47:1 — unreadable */
+  --line: rgba(242,239,232,.13);
+  --line-2: rgba(242,239,232,.07);
+  /* A saturated violet that works on paper goes muddy on near-black: #6d3aff
+     as text was 3.13:1. Lightened and slightly desaturated for dark, with dark
+     ink on top of accent fills — the standard dark-mode inversion. */
+  --accent: #a98cff;
+  --accent-deep: #c9b5ff;
+  --accent-ink: #17102e;
+  --on-color: #14120f;
+  /* A chip fill has to read as a chip. Measured against the card (#221f1a),
+     the queue tints below land at 1.25-1.37:1 and are visible; these two sat
+     at 1.09 and 1.32, so an ai-tag chip was a 1.09 patch on the card — the
+     "tag background mixes into the card" complaint. Both step up to join that
+     band, and accent-tint-2 moves further so the two-step scale (wash vs.
+     disabled-fill) does not collapse into one. Accent text on the new tint is
+     4.76:1, still AA. */
+  --accent-tint: #372a5e;
+  --accent-tint-2: #483681;
+  /* Queue hues lightened for dark ground; the light-mode values were 3:1 or
+     worse here. */
+  --read: #ff8f66;
+  --watch: #7cb2ff;
+  --try: #3ddc9a;
+  --inbox: #e5c04c;
+  --archive: #a7a29a;
+  --good: #3ddc9a;
+  --warn: #e5c04c;
+  --bad: #ff8080;
+  /* Tints follow their hue, so they stay a wash of the same colour rather than
+     a leftover of the light-mode one. */
+  --read-tint: rgba(255,143,102,.14);
+  --watch-tint: rgba(124,178,255,.14);
+  --try-tint: rgba(61,220,154,.13);
+  --inbox-tint: rgba(229,192,76,.14);
+  --archive-tint: rgba(242,239,232,.08);
+  --good-tint: rgba(61,220,154,.13);
+  --warn-tint: rgba(229,192,76,.14);
+  /* Followed the light-mode red (204,58,58) rather than dark's --bad, which
+     made it both off-hue and the weakest fill on the card at 1.10:1. */
+  --bad-tint: rgba(255,128,128,.16);
 }
 
 * { box-sizing: border-box; }
@@ -80,14 +149,29 @@ html, body {
   margin: 0; padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  letter-spacing: -0.005em;
+  /* Manrope is drawn tighter than Inter, so the global negative tracking it
+     needed now works against it. */
+  letter-spacing: 0;
+  /* Counts refresh under the reader (background classify, poll-on-pending), so
+     digits have to hold their column instead of reflowing the label beside them. */
+  font-variant-numeric: tabular-nums;
   min-height: 100vh;
   overflow-x: hidden;
 }
 ::selection { background: var(--accent-tint-2); color: var(--ink); }
+
+/* Headings break at sense, paragraphs avoid orphans. Cheap, and the difference
+   is visible on every card title that runs to two lines. */
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+/* Newsreader is a text serif, so it wants more leading than the sans it sits
+   beside — set here rather than per component. */
+/* Inline serif headings (fontFamily: "var(--font-serif)") get text leading
+   rather than the sans default they would otherwise inherit. */
+[style*="--font-serif"] { line-height: 1.22; }
 
 /* Classifying card animated gradient border */
 .arciv-classifying {
@@ -157,15 +241,19 @@ html, body {
 .arciv-lit-wrap:focus-within::after  { opacity: .55; }
 @keyframes arciv-auth-spin { to { --arciv-auth-angle: 360deg; } }
 
-/* ── URL saver — rotating conic gradient border ─────────────── */
+/* ── Rotating conic gradient border ─────────────────────────────
+   The URL saver's ring, reusable. The wrapped element must paint an opaque
+   background of its own: both layers sit at a negative z-index, so a
+   transparent child shows the gradient through its middle instead of as a
+   ring. `--glow-r` matches the wrap's radius to the child's. */
 @property --arciv-saver-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
-.arciv-saver-wrap {
+.arciv-saver-wrap, .arciv-glow-border {
   position: relative;
-  border-radius: 13px;
+  border-radius: var(--glow-r, 13px);
   isolation: isolate;
 }
-.arciv-saver-wrap::before {
+.arciv-saver-wrap::before, .arciv-glow-border::before {
   content: "";
   position: absolute; inset: -1.5px;
   border-radius: inherit;
@@ -184,7 +272,7 @@ html, body {
   opacity: .55;
   transition: opacity .25s, inset .2s, filter .25s;
 }
-.arciv-saver-wrap::after {
+.arciv-saver-wrap::after, .arciv-glow-border::after {
   content: "";
   position: absolute; inset: -1.5px;
   border-radius: inherit;
@@ -204,12 +292,16 @@ html, body {
   opacity: 0;
   transition: opacity .25s;
 }
-.arciv-saver-wrap:hover::before  { opacity: .9; }
-.arciv-saver-wrap:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
-.arciv-saver-wrap:focus-within::after  { opacity: .55; }
+.arciv-saver-wrap:hover::before, .arciv-glow-border:hover::before { opacity: .9; }
+.arciv-saver-wrap:focus-within::before, .arciv-glow-border:focus-within::before { opacity: 1; inset: -2.5px; filter: saturate(140%); }
+.arciv-saver-wrap:focus-within::after, .arciv-glow-border:focus-within::after { opacity: .55; }
 @keyframes arciv-saver-spin { to { --arciv-saver-angle: 360deg; } }
 
 /* Toast */
+@keyframes arciv-topics-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: none; }
+}
 @keyframes arciv-toastin {
   from { opacity: 0; transform: translate(-50%, 8px); }
   to   { opacity: 1; transform: translateX(-50%); }
@@ -266,46 +358,37 @@ body.layout-list .arciv-card {
 .ldr-root.open{ pointer-events:auto }
 .ldr-root.open .ldr-scrim{ opacity:1 }
 .ldr-root.open .ldr{ transform:none }
-.ldr-hero{ position:relative; height:58px; flex-shrink:0; background:var(--surface-2); border-bottom:1px solid var(--line); overflow:hidden; }
-.ldr-hero-grad{ position:absolute; inset:0; }
-.ldr-hero-overlay{ position:absolute; inset:0; background:linear-gradient(180deg, transparent 30%, color-mix(in oklab, var(--nav) 92%, transparent) 100%); }
-.ldr-x{ position:absolute; top:14px; right:14px; width:32px; height:32px; border:0; border-radius:9px; cursor:pointer; background:color-mix(in oklab, var(--nav) 86%, transparent); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:var(--ink); display:grid; place-items:center; box-shadow:0 1px 0 rgba(255,255,255,.4) inset, 0 1px 2px rgba(22,21,19,.08); transition:background .15s, transform .08s; z-index:2; font-size:18px; }
+.ldr-x{ width:32px; height:32px; flex-shrink:0; border:0; border-radius:9px; cursor:pointer; background:color-mix(in oklab, var(--nav) 86%, transparent); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:var(--ink); display:grid; place-items:center; box-shadow:0 1px 0 rgba(255,255,255,.4) inset, 0 1px 2px rgba(22,21,19,.08); transition:background .15s, transform .08s; z-index:2; font-size:18px; }
 .ldr-x:hover{ background:var(--surface) }
 .ldr-x:active{ transform:translateY(1px) }
-.ldr-hero-bottom{ position:absolute; left:18px; right:18px; bottom:14px; z-index:1; display:flex; align-items:center; gap:8px; }
-.ldr-hero-chips{ display:flex; gap:6px; flex-wrap:wrap }
-.ldr-domain{ display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 11px 0 5px; border-radius:99px; background:color-mix(in oklab, var(--nav) 88%, transparent); border:1px solid var(--line); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-size:12px; color:var(--ink-2); font-weight:500; letter-spacing:-0.005em; }
 .ldr-fav{ width:20px; height:20px; border-radius:6px; display:grid; place-items:center; color:#fff; font-size:11px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.15); }
-.ldr-queue{ display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 11px; border-radius:99px; border:1px solid; font-size:11px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
 .ldr-scroll{ flex:1; overflow-y:auto; padding:22px 24px 8px; display:flex; flex-direction:column; gap:26px; }
 .ldr-scroll::-webkit-scrollbar{ width:8px }
 .ldr-scroll::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px }
 .ldr-title-block{ display:flex; flex-direction:column; gap:10px }
-.ldr-title{ margin:0; font-family:'Instrument Serif', serif; font-weight:400; font-size:26px; line-height:1.12; letter-spacing:-0.015em; color:var(--ink); }
-.ldr-sub{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12.5px; color:var(--muted); }
-.ldr-sub .dot{ width:2.5px; height:2.5px; border-radius:50%; background:var(--muted-2); flex-shrink:0; }
-.ldr-toolbar{ display:flex; gap:6px; padding:6px; background:color-mix(in oklab, var(--surface) 70%, transparent); border:1px solid var(--line); border-radius:13px; box-shadow:0 1px 0 rgba(255,255,255,.5) inset; }
-.ldr-tool{ flex:1; height:36px; padding:0 12px; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; background:transparent; border-radius:9px; cursor:pointer; font:inherit; font-size:12.5px; font-weight:500; color:var(--ink-2); letter-spacing:-0.005em; transition:background .15s, color .15s, transform .08s; }
-.ldr-tool:hover{ background:var(--surface); color:var(--ink) }
-.ldr-tool:active{ transform:translateY(1px) }
-.ldr-tool.primary{ background:var(--btn-dark); color:var(--btn-dark-text); box-shadow:0 1px 0 rgba(255,255,255,.1) inset, 0 1px 2px rgba(22,21,19,.15); }
-.ldr-tool.primary:hover{ background:var(--btn-dark-hover); color:var(--btn-dark-text) }
+.ldr-title{ margin:0; font-family: var(--font-serif); font-weight:400; font-size:24px; line-height:1.2; letter-spacing:-0.02em; color:var(--ink); }
 .ldr-section{ display:flex; flex-direction:column; gap:10px }
 .ldr-section.last{ padding-bottom:12px }
 .ldr-section-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:22px; }
-.ldr-section-label{ display:inline-flex; align-items:center; gap:7px; font-family:ui-monospace,monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.12em; color:var(--muted); font-weight:500; }
-.ldr-count{ font-family:ui-monospace,monospace; font-size:10.5px; color:var(--muted-2); letter-spacing:0.05em; transition:opacity .2s; }
+.ldr-section-label{ display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); font-weight:600; letter-spacing:-0.005em; }
+.ldr-count{ font-family: var(--font-mono); font-size:10.5px; color:var(--muted-2); letter-spacing:0.05em; transition:opacity .2s; }
 .ldr-ghost-btn{ display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border:0; cursor:pointer; background:transparent; border-radius:6px; font:inherit; font-size:11.5px; font-weight:500; color:var(--accent); transition:background .15s; }
 .ldr-ghost-btn:hover{ background:var(--accent-tint) }
 .ldr-ghost-btn:disabled{ color:var(--muted); cursor:default; }
+/* Inside a glow border the button can no longer be transparent — the gradient
+   would fill it rather than outline it. --nav is the drawer's own ground, so
+   it still reads as a ghost button, now with the saver's ring. */
+.ldr-ghost-btn.glow{ background:var(--nav); }
+.ldr-ghost-btn.glow:hover{ background:var(--accent-tint) }
 .ldr-summary{ position:relative; padding:16px 18px; background:linear-gradient(180deg, var(--accent-tint) 0%, var(--surface) 100%); border:1px solid color-mix(in oklab, var(--accent) 18%, var(--line)); border-radius:14px; font-size:14px; line-height:1.6; color:var(--ink-2); letter-spacing:-0.005em; box-shadow:0 1px 0 rgba(255,255,255,.4) inset; }
 .ldr-summary::before{ content:""; position:absolute; left:0; top:14px; bottom:14px; width:2px; background:var(--accent); border-radius:2px; opacity:.5; }
 .ldr-insights{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
 .ldr-insights li{ display:flex; gap:13px; align-items:flex-start; padding:10px 12px; border-radius:10px; transition:background .15s; }
 .ldr-insights li:hover{ background:var(--surface) }
-.ldr-insight-n{ flex-shrink:0; width:24px; font-family:ui-monospace,monospace; font-size:11px; color:var(--muted-2); letter-spacing:0.04em; padding-top:2px; }
+.ldr-insight-n{ flex-shrink:0; width:24px; font-family: var(--font-mono); font-size:11px; color:var(--muted-2); letter-spacing:0.04em; padding-top:2px; }
 .ldr-insight-t{ font-size:13.5px; line-height:1.55; color:var(--ink); letter-spacing:-0.005em; flex:1; }
 .ldr-notes{ width:100%; border:0; outline:0; resize:vertical; min-height:96px; padding:13px 14px; border-radius:12px; background:var(--surface); box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 1px 2px rgba(22,21,19,.04); font:inherit; font-size:13.5px; line-height:1.55; color:var(--ink); letter-spacing:-0.005em; transition:background .15s; box-sizing:border-box; }
+.ldr-notes:hover{ background:var(--nav) }
 .ldr-notes:focus{ background:var(--nav) }
 .ldr-notes::placeholder{ color:var(--muted-2) }
 .ldr-tags{ display:flex; flex-wrap:wrap; gap:6px; padding:9px 10px; background:var(--surface); border:1px solid var(--line); border-radius:12px; min-height:42px; align-items:center; box-shadow:0 1px 0 rgba(255,255,255,.5) inset; transition:border-color .15s; }
@@ -336,17 +419,68 @@ body.layout-list .arciv-card {
 .ldr-meta dd.good{ color:var(--try) }
 .ldr-meta dd.warn{ color:var(--inbox) }
 .ldr-meta dd.bad{ color:var(--bad) }
-.ldr-meta dd.mono{ font-family:ui-monospace,monospace; font-size:11.5px; font-weight:400; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:240px; }
+.ldr-meta dd.mono{ font-family: var(--font-mono); font-size:11.5px; font-weight:400; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:240px; }
 .ldr-foot{ display:flex; gap:8px; align-items:center; padding:14px 24px 20px; border-top:1px solid var(--line-2); background:color-mix(in oklab, var(--nav) 78%, transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); flex-shrink:0; }
 .ldr-primary{ flex:1; height:46px; border:0; border-radius:12px; cursor:pointer; font:inherit; font-weight:500; font-size:14px; letter-spacing:-0.005em; background:var(--btn-dark); color:var(--btn-dark-text); display:inline-flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 4px 14px -3px rgba(22,21,19,.3); transition:transform .08s, background .15s; }
 .ldr-primary:hover{ background:var(--btn-dark-hover) }
 .ldr-primary:active{ transform:translateY(1px) }
-.ldr-primary:disabled{ background:var(--try); color:#fff; opacity:.8; cursor:default; }
+.ldr-primary:disabled{ background:var(--try); color:var(--on-color); opacity:.8; cursor:default; }
 .ldr-secondary{ width:46px; height:46px; border:1px solid var(--line); border-radius:12px; background:var(--surface); cursor:pointer; color:var(--ink-2); display:grid; place-items:center; box-shadow:0 1px 0 rgba(255,255,255,.5) inset; transition:background .15s, color .15s, border-color .15s, transform .08s; }
 .ldr-secondary:hover{ background:var(--surface-2); color:var(--ink) }
+.ldr-secondary.wide{ width:auto; padding:0 16px; font:inherit; font-size:13px; }
+.ldr-secondary.confirm{ color:var(--read); background:var(--read-tint); border-color:color-mix(in oklab, var(--read) 25%, var(--line)); font-weight:600; }
+.ldr-secondary.confirm:hover{ background:color-mix(in oklab, var(--read) 22%, transparent); color:var(--read) }
 .ldr-secondary:active{ transform:translateY(1px) }
 .ldr-secondary.danger:hover{ color:var(--read); background:var(--read-tint); border-color:color-mix(in oklab, var(--read) 25%, var(--line)) }
-@media (prefers-reduced-motion: reduce){ .ldr{ transition:none } .ldr-scrim{ transition:none } }
+
+/* Keyboard focus was invisible on every control in this panel. One rule covers
+   the lot, including the <summary> elements the collapsibles are built on. */
+.ldr :is(button, a, input, textarea, summary):focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px;
+}
+
+/* Identity bar: domain and the two link-level actions stay reachable while the
+   body scrolls, which the decorative gradient hero never did. */
+.ldr-topbar{ display:flex; align-items:center; gap:9px; padding:11px 16px 11px 18px; border-bottom:1px solid var(--line); background:var(--surface-2); flex-shrink:0; }
+.ldr-topbar-domain{ font-size:12.5px; font-weight:500; color:var(--ink-2); letter-spacing:-0.005em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ldr-iconbtn{ width:32px; height:32px; flex-shrink:0; display:grid; place-items:center; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--muted); cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
+.ldr-iconbtn:hover{ background:var(--accent-tint); color:var(--accent); border-color:color-mix(in oklab, var(--accent) 35%, transparent) }
+.ldr-iconbtn.ok{ color:var(--try); border-color:color-mix(in oklab, var(--try) 35%, transparent); background:var(--try-tint) }
+
+.ldr-metaline{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12.5px; color:var(--muted); }
+
+/* Related rows were a bare inline-styled button — no hover, no focus. */
+.ldr-related-row{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); cursor:pointer; transition:background .15s, border-color .15s, transform .08s; }
+.ldr-related-row:hover{ background:var(--surface); border-color:color-mix(in oklab, var(--accent) 30%, var(--line)) }
+.ldr-related-row:active{ transform:translateY(1px) }
+
+/* Retry lived as an unstyled inline chip next to a failed AI status. */
+.ldr-retry{ margin-left:8px; font-size:10.5px; padding:2px 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface-2); color:var(--accent); font-weight:600; cursor:pointer; transition:background .15s, border-color .15s; }
+.ldr-retry:hover{ background:var(--accent-tint); border-color:color-mix(in oklab, var(--accent) 35%, transparent) }
+
+/* The source URL is the one piece of metadata people reach for. Copying it was
+   a button in a distant toolbar; now the value itself is the control. */
+.ldr-url{ display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); cursor:pointer; text-align:left; transition:background .15s, border-color .15s; }
+.ldr-url:hover{ background:var(--surface); border-color:color-mix(in oklab, var(--accent) 30%, var(--line)) }
+.ldr-url span{ font-family:var(--font-mono); font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.ldr-url svg{ flex-shrink:0; color:var(--muted) }
+.ldr-url:hover svg{ color:var(--accent) }
+
+/* Collapsibles: long panels shouldn't force a scroll past content you're not
+   reading. Native <details>, so no extra state to keep in sync. */
+.ldr-fold{ border:1px solid var(--line); border-radius:12px; background:var(--surface-2); overflow:hidden; }
+.ldr-fold > summary{ display:flex; align-items:center; gap:8px; padding:11px 13px; cursor:pointer; list-style:none; font-size:12.5px; font-weight:600; color:var(--muted); transition:background .15s, color .15s; }
+.ldr-fold > summary::-webkit-details-marker{ display:none }
+.ldr-fold > summary:hover{ background:var(--surface); color:var(--ink) }
+.ldr-fold > summary .chev{ margin-left:auto; transition:transform .18s ease; flex-shrink:0 }
+.ldr-fold[open] > summary .chev{ transform:rotate(90deg) }
+.ldr-fold[open] > summary{ border-bottom:1px solid var(--line) }
+.ldr-fold-body{ padding:13px }
+
+@media (prefers-reduced-motion: reduce){
+  .ldr{ transition:none } .ldr-scrim{ transition:none }
+  .ldr-fold > summary .chev{ transition:none }
+}
 
 /* ── Notification drawer ─────────────────────────────────── */
 .arciv-drawer-root {
@@ -385,7 +519,7 @@ body.layout-list .arciv-card {
 }
 .arciv-drawer-head-txt { flex: 1; min-width: 0; }
 .arciv-drawer-eyebrow {
-  font-family: ui-monospace, monospace; font-size: 10.5px;
+  font-family: var(--font-mono); font-size: 10.5px;
   text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
 }
 .arciv-drawer-head-txt h2 {
@@ -409,7 +543,7 @@ body.layout-list .arciv-card {
   padding: 22px 22px 8px; flex-shrink: 0;
 }
 .arciv-drawer-list-h span {
-  font-family: ui-monospace, monospace; font-size: 10.5px;
+  font-family: var(--font-mono); font-size: 10.5px;
   text-transform: uppercase; letter-spacing: .1em; color: var(--muted-2);
 }
 .arciv-drawer-list {
@@ -455,14 +589,6 @@ body.layout-list .arciv-card {
 }
 
 /* ── Hero: greeting + weekly activity ───────────────────── */
-@keyframes arciv-hero-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--try) 50%, transparent); }
-  50%       { box-shadow: 0 0 0 5px transparent; }
-}
-@keyframes arciv-inbox-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--inbox) 50%, transparent); }
-  50%       { box-shadow: 0 0 0 5px transparent; }
-}
 @keyframes arciv-hp-bar-in {
   from { transform: scaleY(0); }
   to   { transform: scaleY(1); }
@@ -476,23 +602,11 @@ body.layout-list .arciv-card {
   margin: 0 0 24px;
 }
 .arciv-hero-greet { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.arciv-hero-eyebrow {
-  display: inline-flex; align-items: center; gap: 10px; width: fit-content;
-  font-family: ui-monospace, monospace;
-  font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--muted-2);
-}
-.arciv-hero-pulse {
-  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-  background: var(--try);
-  animation: arciv-hero-pulse 2.4s ease-in-out infinite;
-}
-.arciv-hero-pulse.warn { background: var(--inbox); animation-name: arciv-inbox-pulse; }
-.arciv-hero-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--muted-2); opacity: .55; flex-shrink: 0; }
 .arciv-hero-title {
   margin: 0;
-  font-family: 'Instrument Serif', serif; font-weight: 400;
-  font-size: clamp(36px, 4.4vw, 54px); line-height: 1; letter-spacing: -0.015em;
+  font-family: var(--font-serif); font-weight: 450;
+  font-size: clamp(33px, 4vw, 48px); line-height: 1.06; letter-spacing: -0.02em;
+  text-wrap: balance;
   color: var(--ink);
 }
 .arciv-hero-title em { font-style: italic; color: var(--accent); }
@@ -515,15 +629,15 @@ body.layout-list .arciv-card {
 }
 .arciv-hp-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .arciv-hp-label {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
 }
 .arciv-hp-total {
-  font-family: 'Instrument Serif', serif; font-size: 30px; line-height: 1;
+  font-family: var(--font-serif); font-size: 27px; line-height: 1.05;
   color: var(--ink); letter-spacing: -0.01em;
 }
 .arciv-hp-total em {
-  font-style: normal; font-family: ui-monospace, monospace;
+  font-style: normal; font-family: var(--font-mono);
   font-size: 11px; color: var(--muted); margin-left: 6px;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
@@ -551,7 +665,7 @@ body.dark .arciv-hp-col { background: color-mix(in oklab, var(--ink) 7%, transpa
 .arciv-hp-col.today .arciv-hp-bar { background: linear-gradient(180deg, var(--accent), var(--accent-deep)); }
 .arciv-hp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 8px; }
 .arciv-hp-day {
-  text-align: center; font-family: ui-monospace, monospace;
+  text-align: center; font-family: var(--font-mono);
   font-size: 10px; color: var(--muted-2); letter-spacing: 0.08em; line-height: 1;
 }
 .arciv-hp-day.today { color: var(--accent); font-weight: 600; }
@@ -575,24 +689,24 @@ body.dark .arciv-hp-col { background: color-mix(in oklab, var(--ink) 7%, transpa
 .arciv-stat-item:hover { background: color-mix(in oklab, var(--surface) 90%, transparent); }
 .arciv-stat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .arciv-stat-label {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted); font-weight: 500;
 }
 .arciv-stat-ico { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0; }
 .arciv-stat-num {
-  font-family: 'Instrument Serif', serif;
-  font-size: 36px; font-weight: 400; letter-spacing: -0.015em;
-  color: var(--ink); line-height: 1;
+  font-family: var(--font-serif);
+  font-size: 33px; font-weight: 450; letter-spacing: -0.02em;
+  color: var(--ink); line-height: 1.04;
   display: flex; align-items: baseline; gap: 4px;
 }
 .arciv-stat-num em {
-  font-style: normal; font-family: ui-monospace, monospace;
+  font-style: normal; font-family: var(--font-mono);
   font-size: 11px; color: var(--muted); font-weight: 500;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
 .arciv-stat-delta {
-  font-size: 11px; font-family: ui-monospace, monospace;
+  font-size: 11px; font-family: var(--font-mono);
   color: var(--muted); letter-spacing: 0.02em;
   display: inline-flex; align-items: center; gap: 5px;
 }
@@ -615,8 +729,6 @@ body.dark .arciv-hp-col { background: color-mix(in oklab, var(--ink) 7%, transpa
 @media (max-width: 639px) {
   /* Hide the activity chart on mobile — greeting alone is enough */
   .arciv-hero-panel { display: none; }
-  /* Let eyebrow items wrap instead of overflowing */
-  .arciv-hero-eyebrow { flex-wrap: wrap; gap: 6px; row-gap: 4px; }
   /* Tighten vertical rhythm */
   .arciv-hero { margin-bottom: 16px; }
   .arciv-hero-greet { gap: 10px; }

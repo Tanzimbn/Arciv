@@ -3,7 +3,10 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import StringConstraints
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,11 +26,24 @@ from agent.registry import make_provider
 from api.config import settings
 from api.utils.encryption import decrypt_secret
 from api.utils.heuristics import classify_by_url
+from api.utils.link_query import apply_link_filters, apply_queue_scope
 from api.utils.metadata import canonicalize_url, fetch_article_text, fetch_metadata
 from api.utils.ratelimit import enforce_user_rate_limit
 from api.utils.storage import adjust_user_storage, link_bytes
 
 router = APIRouter()
+
+#: Topic keys to filter by, repeatable (``?tag=rust&tag=llm``). Each key becomes
+#: its own EXISTS over the row's unnested ai_tags, so the count is capped: ten is
+#: far more than a chip UI produces, and keeps a hand-built URL from turning into
+#: ten normalising subqueries per row. The inner cap is per key, as before.
+TagFilter = Annotated[
+    list[Annotated[str, StringConstraints(max_length=50)]] | None,
+    Query(
+        max_length=10,
+        description="Normalised topic key from GET /api/topics. Repeatable: ?tag=rust&tag=llm",
+    ),
+]
 
 
 @router.post("", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
@@ -149,24 +165,47 @@ async def create_link(
 @router.get("", response_model=list[LinkResponse])
 async def list_links(
     queue: str | None = Query(None),
+    tag: TagFilter = None,
+    tag_logic: Literal["any", "all"] = Query(
+        "any", description="How several tags combine: union (any) or intersection (all)"
+    ),
+    content_type: str | None = Query(None, max_length=50),
+    domain: str | None = Query(None, max_length=253, description="Exact host, e.g. github.com"),
+    since: datetime | None = Query(None, description="Saved at or after this instant"),
+    until: datetime | None = Query(None, description="Saved at or before this instant"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Lists links for the current user, optionally filtered by queue.
+    Lists links for the current user, optionally filtered.
     - Executes in api/routers/links.py as a GET route.
     - Filters by queue if provided; defaults to active links.
+    - ``tag``/``content_type``/``domain``/``since``/``until`` AND together on top,
+      via the same helper the search route uses.
+
+    The ``tag`` filter matches on the normalised key (api.utils.tags), so it scans
+    the caller's rows rather than using an index: a GIN index on ``ai_tags`` indexes
+    raw values and cannot answer a predicate over a normalised element. Bounded by
+    ``MAX_LINKS_PER_USER`` and already narrowed by ``idx_links_user_queue``, so this
+    is a scan of one user's library, not the table. Revisit with an IMMUTABLE
+    normalising function plus a GIN expression index if per-user libraries grow.
     """
     q = select(Link).where(Link.user_id == current_user.id)
+    q = apply_queue_scope(q, queue)
 
-    if queue == "archive":
-        q = q.where(Link.status == "done")
-    elif queue:
-        q = q.where(Link.queue == queue, Link.status == "active")
-    else:
-        q = q.where(Link.status == "active")
+    q, impossible = apply_link_filters(
+        q,
+        tag=tag,
+        tag_logic=tag_logic,
+        content_type=content_type,
+        domain=domain,
+        since=since,
+        until=until,
+    )
+    if impossible:
+        return []
 
     q = q.order_by(Link.saved_at.desc()).offset((page - 1) * limit).limit(limit)
     result = await db.execute(q)
@@ -200,6 +239,12 @@ async def _cached_query_embedding(redis, q: str) -> list[float] | None:
 async def search_links(
     request: Request,
     q: str = Query(..., min_length=1),
+    tag: TagFilter = None,
+    tag_logic: Literal["any", "all"] = Query("any"),
+    content_type: str | None = Query(None, max_length=50),
+    domain: str | None = Query(None, max_length=253),
+    since: datetime | None = Query(None),
+    until: datetime | None = Query(None),
     limit: int = Query(30, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -234,12 +279,24 @@ async def search_links(
             detail="Semantic search is unavailable.",
         )
 
-    stmt = (
-        select(Link)
-        .where(Link.user_id == current_user.id, Link.embedding.is_not(None))
-        .order_by(Link.embedding.cosine_distance(vec))
-        .limit(limit)
+    stmt = select(Link).where(
+        Link.user_id == current_user.id, Link.embedding.is_not(None)
     )
+    # Filter *before* ranking. Ranking first and filtering the page afterwards
+    # would turn "top 30 matches, of which 3 are tagged rust" into a 3-result
+    # search and hide the rest of the library's rust links entirely.
+    stmt, impossible = apply_link_filters(
+        stmt,
+        tag=tag,
+        tag_logic=tag_logic,
+        content_type=content_type,
+        domain=domain,
+        since=since,
+        until=until,
+    )
+    if impossible:
+        return []
+    stmt = stmt.order_by(Link.embedding.cosine_distance(vec)).limit(limit)
     result = await db.execute(stmt)
     return result.scalars().all()
 

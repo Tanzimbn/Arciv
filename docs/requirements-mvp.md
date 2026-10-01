@@ -199,7 +199,7 @@ This is the critical design requirement. The system must handle AI failure at ev
 The system watches blog and newsletter sources the user subscribes to, checks them daily for new posts, and notifies the user.
 
 #### User story
-> As a user, I subscribe to 10 tech blogs and 3 Substacks. Every morning, Arciv checks them all, automatically adds any new posts to my Read Later queue, and sends me a summary of what's new — via Telegram or in-app notification. I don't have to manually check any of these sites.
+> As a user, I subscribe to 10 tech blogs and 3 Substacks. Every morning, Arciv checks them all, automatically adds any new posts to my Read Later queue, and sends me a summary of what's new as an in-app notification. I don't have to manually check any of these sites.
 
 #### How sources are added
 
@@ -241,28 +241,12 @@ Daily is intentional for MVP. Hourly polling is more complex to scale and most b
 
 **FR-F-05 — New content notification**
 
-When new posts are found in the daily poll, the user must be notified. Two notification methods for MVP:
+When new posts are found in the daily poll, the user must be notified in-app:
 
-**In-app notification** (always enabled):
 - A notification bell icon in the top bar shows a badge count of unread notifications
 - Clicking it opens a notification panel listing: "[Blog Name] published 2 new posts today" with titles and links
 - Notifications are marked as read when the panel is opened
-
-**Telegram notification** (optional, user-configured):
-- If the user has linked their Telegram account, the bot sends a daily message:
-
-```
-📬 Arciv Daily — 3 new posts added
-
-• Paul Graham's Blog: "What to Do With Your Ideas"
-• Lenny's Newsletter: "The Art of the Roadmap"
-• ByteByteGo: "How Search Engines Work"
-
-View all in Arciv →
-```
-
-- This message is sent once per day, only if there are new items
-- If no new items were found, no message is sent
+- One notification per day per feed, raised only if there are new items — if nothing new was found, nothing is raised
 
 **FR-F-06 — Feed failure handling**
 If a feed fails to fetch (DNS error, timeout, HTTP 5xx):
@@ -279,13 +263,6 @@ A dedicated Feed Tracker page must show:
 - "Add source" input at the top
 - Pause / Resume toggle per feed (paused feeds are skipped in the daily poll)
 - Delete button per feed (with confirmation: *"Remove this source? Your saved items from it will not be deleted."*)
-
-**FR-F-08 — Telegram bot for MVP**
-The Telegram bot in MVP has two jobs only:
-1. Link submission: user forwards a URL to the bot → saved to Arciv (same as manual web submission)
-2. Daily digest: bot sends the daily new content notification
-
-Linking Telegram to a Arciv account is done via a one-time token from the Settings page. User sends `/start <token>` to the bot to complete linking.
 
 ---
 
@@ -321,13 +298,11 @@ Linking Telegram to a Arciv account is done via a one-time token from the Settin
 
 **NFR-S-04** — Rate limiting on the link submission endpoint: max 30 links per user per hour.
 
-**NFR-S-05** — Telegram webhook must validate the `X-Telegram-Bot-Api-Secret-Token` header on every request.
-
 ### Self-hosting
 
 **NFR-H-01** — Full system must start with `docker compose up`. No manual steps after setting `.env` variables.
 
-**NFR-H-02** — All config (DB credentials, AI keys, Telegram token, cron time) is via `.env` file only.
+**NFR-H-02** — All config (DB credentials, AI keys, cron time) is via `.env` file only.
 
 **NFR-H-03** — An `.env.example` file must document every variable.
 
@@ -347,7 +322,6 @@ Chosen for simplicity, beginner-friendliness, and good learning value.
 | Page scraping | **httpx + BeautifulSoup4** | Fetch pages, extract metadata, discover feed URLs |
 | Frontend | **React + Vite + TailwindCSS** | SPA, fast builds, widely understood |
 | Auth | **JWT** (via python-jose) + bcrypt | Stateless, works well for self-hosted |
-| Telegram bot | **python-telegram-bot** | Well-maintained, async |
 | Containerisation | **Docker + Docker Compose** | Single-command deployment |
 | DB migrations | **Alembic** | Version-controlled schema changes |
 
@@ -381,10 +355,8 @@ CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           VARCHAR(255) UNIQUE NOT NULL,
     password_hash   VARCHAR(255) NOT NULL,
-    telegram_chat_id BIGINT,                        -- null until linked
     ai_provider     VARCHAR(50) DEFAULT 'gemini',   -- gemini | groq | anthropic | openai | ollama
     ai_api_key_enc  TEXT,                           -- AES-256 encrypted, null = use shared default
-    feed_notify_telegram BOOLEAN DEFAULT true,
     feed_notify_inapp    BOOLEAN DEFAULT true,
     created_at      TIMESTAMPTZ DEFAULT now()
 );
@@ -572,7 +544,6 @@ Minimal surface area for MVP.
 |---|---|---|
 | `POST` | `/api/auth/register` | Create account (email + password) |
 | `POST` | `/api/auth/login` | Returns JWT access token |
-| `POST` | `/api/auth/telegram/link` | Returns one-time token for Telegram linking |
 
 ### Links
 | Method | Endpoint | Description |
@@ -623,7 +594,7 @@ Explicitly excluded. Do not build these in v1.
 | Topic explorer / clustering | Nice to have, not core to the problem |
 | Proactive agent / nudges | Requires usage history and more AI calls |
 | Weekly knowledge digest | Low priority without established usage patterns |
-| Browser extension | Telegram bot + web paste covers mobile + desktop for now |
+| Browser extension | Web paste covers desktop and mobile for now |
 | Social / sharing features | Not a social product in v1 |
 | Multi-user / teams | Single user per instance is fine for MVP |
 | Non-feed URL change detection | Ambitious feature, save for v2 |
@@ -631,7 +602,7 @@ Explicitly excluded. Do not build these in v1.
 | Reading mode / distraction-free view | Out of scope |
 | Highlights / annotations | Out of scope |
 | Data export | Useful, but not blocking |
-| Mobile app | Telegram bot covers mobile use case |
+| Mobile app | The responsive web app covers mobile for now |
 | OAuth / Google login | Email + password is enough for MVP |
 
 ---
@@ -669,11 +640,9 @@ Week 4 — Feed tracker
   ├── Feed failure handling + consecutive_failures counter
   └── Feed Manager UI: add/pause/remove sources
 
-Week 5 — Notifications + Telegram
+Week 5 — Notifications
   ├── In-app notification bell + panel
-  ├── Telegram bot: /start <token> linking flow
-  ├── Telegram bot: receive URL → submit to API
-  ├── Daily digest message via Telegram
+  ├── Daily digest notification
   └── Settings: notification preferences
 
 Week 6 — Polish + ship
@@ -685,4 +654,4 @@ Week 6 — Polish + ship
 ```
 
 **Definition of done for MVP:**
-A user can self-host with `docker compose up`, paste a link from the web, have it classified by AI (or gracefully queued if AI is down), subscribe to a blog feed, and receive a Telegram notification the next morning when that blog publishes something new.
+A user can self-host with `docker compose up`, paste a link from the web, have it classified by AI (or gracefully queued if AI is down), subscribe to a blog feed, and receive a notification the next morning when that blog publishes something new.

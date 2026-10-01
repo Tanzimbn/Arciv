@@ -79,11 +79,6 @@ const ArrowIcon = ({ style }) => (
     <path d="M5 12h14M13 6l6 6-6 6"/>
   </svg>
 );
-const ArcivLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 18h16M7 18 12 6l5 12M9.5 14h5"/>
-  </svg>
-);
 const GoogleG = () => (
   <svg width="16" height="16" viewBox="0 0 24 24">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z"/>
@@ -133,7 +128,7 @@ function StrengthMeter({ password }) {
           }} />
         ))}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
         <span>Password strength</span>
         <b style={{ fontWeight: 500, color: s > 0 ? color : "var(--ink-2)" }}>{STRENGTH_LABELS[s]}</b>
       </div>
@@ -235,15 +230,7 @@ function BrandPane() {
 
       {/* Brand */}
       <div style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 11,
-          background: "radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.4), transparent 55%), linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 65%, #1a0c4a))",
-          display: "grid", placeItems: "center",
-          boxShadow: "0 1px 0 rgba(255,255,255,.6) inset, 0 -3px 8px rgba(0,0,0,.2) inset, 0 6px 18px -3px color-mix(in oklab, var(--accent) 60%, transparent), 0 1px 2px rgba(0,0,0,.08)",
-        }}>
-          <ArcivLogo />
-        </div>
-        <span style={{ fontWeight: 600, fontSize: 19, letterSpacing: "-0.025em", color: "var(--ink)" }}>
+        <span style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 22, letterSpacing: "-0.02em", color: "var(--ink)" }}>
           arciv<em style={{ fontStyle: "normal", color: "var(--accent)" }}>.</em>
         </span>
       </div>
@@ -251,7 +238,7 @@ function BrandPane() {
       {/* Hero */}
       <div style={{ position: "relative", zIndex: 1, maxWidth: 520, marginTop: "8vh" }}>
         <h1 style={{
-          fontFamily: "'Instrument Serif', serif", fontWeight: 400,
+          fontFamily: "var(--font-serif)", fontWeight: 400,
           fontSize: "clamp(40px, 5.4vw, 64px)", lineHeight: 1.02,
           letterSpacing: "-0.015em", margin: 0, color: "var(--ink)",
         }}>
@@ -278,7 +265,7 @@ function BrandPane() {
           boxShadow: "0 1px 0 rgba(22,21,19,.04), 0 1px 2px rgba(22,21,19,.04), 0 14px 40px -16px rgba(22,21,19,.25)",
           display: "flex", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--watch)", flexShrink: 0, boxShadow: "0 0 0 3px color-mix(in oklab, var(--watch) 18%, transparent)" }} />
             Watch later · youtube.com
           </div>
@@ -302,7 +289,7 @@ function BrandPane() {
           boxShadow: "0 1px 0 rgba(22,21,19,.04), 0 1px 2px rgba(22,21,19,.04), 0 14px 40px -16px rgba(22,21,19,.25)",
           display: "flex", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", flexShrink: 0, boxShadow: "0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent)" }} />
             Classified · stripe.com/blog
           </div>
@@ -325,7 +312,7 @@ function BrandPane() {
           boxShadow: "0 1px 0 rgba(22,21,19,.04), 0 1px 2px rgba(22,21,19,.04), 0 14px 40px -16px rgba(22,21,19,.25)",
           display: "flex", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--try)", flexShrink: 0, boxShadow: "0 0 0 3px color-mix(in oklab, var(--try) 18%, transparent)" }} />
             Try later · linear.app
           </div>
@@ -344,7 +331,7 @@ function BrandPane() {
       <div style={{
         position: "relative", zIndex: 1,
         display: "flex", alignItems: "center", gap: 10,
-        color: "var(--muted)", fontSize: 12, fontFamily: "monospace",
+        color: "var(--muted)", fontSize: 12, fontFamily: "var(--font-mono)",
       }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--try)", boxShadow: "0 0 0 3px color-mix(in oklab, var(--try) 18%, transparent)" }} />
         12,481 links saved this week
@@ -506,7 +493,7 @@ export default function LoginView({ onLogin }) {
             {/* Heading */}
             <div>
               <h2 style={{
-                fontFamily: "'Instrument Serif', serif", fontWeight: 400,
+                fontFamily: "var(--font-serif)", fontWeight: 400,
                 fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.015em",
                 margin: 0, color: "var(--ink)",
               }}>
@@ -542,7 +529,7 @@ export default function LoginView({ onLogin }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 <span style={{
-                  fontSize: 11, fontWeight: 600, fontFamily: "monospace",
+                  fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono)",
                   letterSpacing: "0.1em", textTransform: "uppercase",
                   background: "var(--surface-2)", border: "1px solid var(--line)",
                   color: "var(--muted)", padding: "4px 10px", borderRadius: 99,
@@ -554,7 +541,7 @@ export default function LoginView({ onLogin }) {
             </div>
 
             {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: "monospace", fontSize: 10.5, letterSpacing: "0.14em", color: "var(--muted-2)", textTransform: "uppercase" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: "0.14em", color: "var(--muted-2)", textTransform: "uppercase" }}>
               <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
               or with email
               <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
@@ -664,7 +651,7 @@ export default function LoginView({ onLogin }) {
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center",
           paddingTop: 18, fontSize: 12, color: "var(--muted)",
-          fontFamily: "monospace", letterSpacing: "0.04em",
+          fontFamily: "var(--font-mono)", letterSpacing: "0.04em",
         }}>
           <span>arciv © 2026</span>
           <div style={{ display: "flex", gap: 14 }}>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, errMessage } from "../api/client.js";
+import { useScrollLock } from "../hooks/useScrollLock.js";
 
 // ── Constants ─────────────────────────────────────────────────
 const QUEUE_OPTIONS = [
@@ -110,6 +111,7 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
   const [insightsStatus, setInsightsStatus] = useState("idle");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(!!link?.notes?.trim());
 
   const notesTimerRef = useRef(null);
   const savedTimerRef = useRef(null);
@@ -125,6 +127,7 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
       setNotesStatus("idle");
       setInsightsStatus("idle");
       setDeleteConfirm(false);
+      setNotesOpen(!!link.notes?.trim());
     } else {
       const t = setTimeout(() => setData(null), 360);
       return () => clearTimeout(t);
@@ -148,6 +151,9 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
       .finally(() => { if (!cancelled) setRelatedLoading(false); });
     return () => { cancelled = true; };
   }, [link]);
+
+  // The page behind must not scroll under the drawer.
+  useScrollLock(open);
 
   // Esc to close
   useEffect(() => {
@@ -250,10 +256,6 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
   const favColor = domainColor(domain);
   const favLetter = domain[0]?.toUpperCase() ?? "?";
   const isArchive = data.status === "done";
-  const queueMeta = isArchive
-    ? { color: "var(--archive)", tint: "var(--archive-tint)", label: "Archive" }
-    : (QUEUE_OPTIONS.find(q => q.id === data.queue) ?? QUEUE_OPTIONS[3]);
-
   // "pending" only means "classifying" when the pipeline can actually run: the
   // page was fetchable AND an AI provider is available. An unreachable fetch
   // never enqueues classify, and a keyless user has no provider — in both cases
@@ -275,40 +277,50 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
   return createPortal(
     <div className={`ldr-root${open ? " open" : ""}`}>
       <div className="ldr-scrim" onClick={onClose} />
-      <aside className="ldr" role="dialog" aria-modal="true">
+      <aside className="ldr" role="dialog" aria-modal="true" aria-label="Link details">
 
-        {/* ── Hero (no image, gradient based on queue color) ── */}
-        <div className="ldr-hero">
-          <div className="ldr-hero-grad" style={{
-            background: `linear-gradient(135deg, color-mix(in oklab, ${queueMeta.color} 10%, var(--surface-2)) 0%, var(--surface-2) 70%)`,
-          }} />
-          <div className="ldr-hero-overlay" />
+        {/* Identity bar — where the link is from, and the two things you do to a
+            link rather than to its record. Sticky, so both stay reachable while
+            the body scrolls; the gradient hero this replaces was decoration
+            that pushed the summary a screen down. */}
+        <div className="ldr-topbar">
+          {data.favicon_url
+            ? <img src={data.favicon_url} alt="" width={20} height={20} style={{ borderRadius: 6, flexShrink: 0, objectFit: "contain" }}
+                onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "grid"; }} />
+            : null}
+          <span className="ldr-fav" style={{ background: favColor, display: data.favicon_url ? "none" : "grid", flexShrink: 0 }}>{favLetter}</span>
+          <span className="ldr-topbar-domain">{domain}</span>
+          <div style={{ flex: 1 }} />
+          <a
+            href={data.canonical_url} target="_blank" rel="noopener noreferrer"
+            className="ldr-iconbtn" title="Open original in a new tab"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+          <button
+            className={`ldr-iconbtn${copied ? " ok" : ""}`}
+            onClick={handleCopy}
+            title={copied ? "URL copied" : "Copy URL"}
+          >
+            {copied
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+          </button>
           <button className="ldr-x" onClick={onClose} title="Close (Esc)">×</button>
-          <div className="ldr-hero-bottom">
-            <div className="ldr-hero-chips">
-              <div className="ldr-domain">
-                {data.favicon_url
-                  ? <img src={data.favicon_url} alt="" width={20} height={20} style={{ borderRadius: 6, objectFit: "contain", display: "block" }} onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "grid"; }} />
-                  : null
-                }
-                <span className="ldr-fav" style={{ background: favColor, display: data.favicon_url ? "none" : "grid" }}>{favLetter}</span>
-                <span>{domain}</span>
-              </div>
-              <div className="ldr-queue" style={{ background: queueMeta.tint, color: queueMeta.color, borderColor: `color-mix(in oklab, ${queueMeta.color} 25%, transparent)` }}>
-                {queueMeta.label}
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* ── Scroll body ── */}
         <div className="ldr-scroll">
 
-          {/* Title block */}
+          {/* Title, then one meta line. The queue and type are not repeated
+              here — they are controls in Filing below, and stating them twice
+              is how the old panel ended up with the same fact in two places. */}
           <div className="ldr-title-block">
             <h2 className="ldr-title">{data.title || domain}</h2>
-            <div className="ldr-sub">
-              <span>{formatDate(data.saved_at)}</span>
+            <div className="ldr-metaline">
+              <span>Saved {formatDate(data.saved_at)}</span>
               {data.done_at && (
                 <>
                   <span className="dot" />
@@ -318,54 +330,26 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
             </div>
           </div>
 
-          {/* Action toolbar */}
-          <div className="ldr-toolbar">
-            <a
-              href={data.canonical_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ldr-tool primary"
-              style={{ textDecoration: "none" }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-              Open
-            </a>
-            <button className="ldr-tool" onClick={handleCopy}>
-              {copied
-                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              }
-              {copied ? "Copied!" : "Copy URL"}
-            </button>
-          </div>
-
-          {/* AI Summary */}
+          {/* The answer to "what is this" comes first, with no label above it —
+              a paragraph in that position needs no announcing. */}
           {(data.ai_summary || data.description) && (
-            <section className="ldr-section">
-              <div className="ldr-section-h">
-                <div className="ldr-section-label">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                  AI Summary
-                </div>
-              </div>
-              <div className="ldr-summary">
-                {data.ai_summary || data.description}
-              </div>
-            </section>
+            <div className="ldr-summary">
+              {data.ai_summary || data.description}
+            </div>
           )}
 
-          {/* Key Insights */}
+          {/* Insights */}
           <section className="ldr-section">
             <div className="ldr-section-h">
               <div className="ldr-section-label">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Key Insights
+                Key insights
               </div>
+              {/* Same rotating ring as the URL saver — the two are the app's
+                  "this calls the AI" affordances, so they read as a pair. */}
+              <span className="arciv-glow-border" style={{ "--glow-r": "6px", display: "inline-flex" }}>
               <button
-                className="ldr-ghost-btn"
+                className="ldr-ghost-btn glow"
                 onClick={handleGenerateInsights}
                 disabled={insightsStatus === "loading"}
               >
@@ -378,6 +362,7 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
                   </>
                 ) : data.ai_insights?.length ? "Regenerate" : "Generate"}
               </button>
+              </span>
             </div>
 
             {typeof insightsStatus === "string" && insightsStatus !== "idle" && insightsStatus !== "loading" && (
@@ -397,41 +382,46 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
 
             {insightsStatus === "idle" && !data.ai_insights?.length && (
               <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                Click <strong style={{ color: "var(--ink-2)" }}>Generate</strong> to extract key insights from this article.
+                Pull the main points out of this page with <strong style={{ color: "var(--ink-2)" }}>Generate</strong>.
               </p>
             )}
           </section>
 
-          {/* Notes */}
+          {/* Filing — queue, type and tags were three controls split across two
+              sections a screen apart. They answer one question: where this
+              lives and what it is about. */}
           <section className="ldr-section">
             <div className="ldr-section-h">
               <div className="ldr-section-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                Notes
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                Filing
               </div>
-              <span className="ldr-count" style={{ opacity: notes.trim() ? 1 : 0 }}>
-                {notesStatus === "saving" ? "saving…" : notesStatus === "saved" ? "saved ✓" : notesStatus === "error" ? "error" : `${notes.length}`}
-              </span>
+              <span className="ldr-count">{tags.length}/20 tags</span>
             </div>
-            <div className="arciv-lit-wrap">
-              <textarea
-                className="ldr-notes"
-                placeholder="What did you find here? Highlights, takeaways, follow-ups…"
-                value={notes}
-                onChange={e => handleNotesChange(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </section>
-
-          {/* Tags */}
-          <section className="ldr-section">
-            <div className="ldr-section-h">
-              <div className="ldr-section-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                Tags
-              </div>
-              <span className="ldr-count">{tags.length}/20</span>
+            <div className="ldr-class">
+              <label>
+                <span>Queue</span>
+                <CustomSelect
+                  value={queue}
+                  options={QUEUE_OPTIONS}
+                  onChange={handleQueueChange}
+                  renderTrigger={v => (
+                    <>
+                      <span className="ldr-select-swatch" style={{ background: v.color }} />
+                      {v.label}
+                    </>
+                  )}
+                />
+              </label>
+              <label>
+                <span>Type</span>
+                <CustomSelect
+                  value={contentType ? contentType.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Other"}
+                  options={CONTENT_TYPES}
+                  onChange={handleContentTypeChange}
+                  renderTrigger={v => <>{v}</>}
+                />
+              </label>
             </div>
             <div className="ldr-tags">
               {tags.map((t, i) => (
@@ -448,7 +438,34 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
             </div>
           </section>
 
-          {/* Related */}
+          {/* Notes — folded away until there is something in them, so an empty
+              textarea doesn't take a fifth of the panel on every open. */}
+          <details className="ldr-fold" open={notesOpen} onToggle={e => setNotesOpen(e.currentTarget.open)}>
+            <summary>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              {notes.trim() ? "Your notes" : "Add a note"}
+              {notes.trim() && notesStatus !== "idle" && (
+                <span className="ldr-count" style={{ marginLeft: 4 }}>
+                  {notesStatus === "saving" ? "saving…" : notesStatus === "saved" ? "saved ✓" : "error"}
+                </span>
+              )}
+              <svg className="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </summary>
+            <div className="ldr-fold-body">
+              <textarea
+                className="ldr-notes"
+                placeholder="What did you find here? Highlights, takeaways, follow-ups…"
+                value={notes}
+                onChange={e => handleNotesChange(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </details>
+
+          {/* Related — a way out of this link, so it belongs after everything
+              about this link rather than interrupting it. */}
           {(relatedLoading || related.length > 0) && (
             <section className="ldr-section">
               <div className="ldr-section-h">
@@ -465,11 +482,7 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
                     let rd = r.canonical_url;
                     try { rd = new URL(r.canonical_url).hostname.replace(/^www\./, ""); } catch {}
                     return (
-                      <button
-                        key={r.id}
-                        onClick={() => onOpenLink?.(r)}
-                        style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface-2)", cursor: "pointer" }}
-                      >
+                      <button key={r.id} onClick={() => onOpenLink?.(r)} className="ldr-related-row">
                         {r.favicon_url
                           ? <img src={r.favicon_url} alt="" width={22} height={22} style={{ flex: "0 0 auto", borderRadius: 6, objectFit: "contain" }} onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "grid"; }} />
                           : null}
@@ -486,84 +499,49 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
             </section>
           )}
 
-          {/* Classification */}
-          <section className="ldr-section">
-            <div className="ldr-section-h">
-              <div className="ldr-section-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                Classification
-              </div>
+          {/* Details — pipeline state, folded. Saved and Archived are no longer
+              repeated here; the meta line above owns them. */}
+          <details className="ldr-fold">
+            <summary>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Details
+              <svg className="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </summary>
+            <div className="ldr-fold-body" style={{ display: "grid", gap: 10 }}>
+              <dl className="ldr-meta" style={{ margin: 0 }}>
+                <div><dt>AI status</dt>
+                  <dd className={aiStatusLabel.cls}>
+                    {aiStatusLabel.text}
+                    {data.ai_status === "failed" && (
+                      <button className="ldr-retry" onClick={() => onRetryAI(data.id)}>↺ Retry</button>
+                    )}
+                  </dd>
+                </div>
+                <div><dt>Fetch</dt><dd className={data.fetch_status === "ok" ? "good" : "bad"}>{data.fetch_status}</dd></div>
+              </dl>
+              <button className="ldr-url" onClick={handleCopy} title="Copy URL">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <span>{data.canonical_url}</span>
+              </button>
             </div>
-            <div className="ldr-class">
-              <label>
-                <span>Queue</span>
-                <CustomSelect
-                  value={queue}
-                  options={QUEUE_OPTIONS}
-                  onChange={handleQueueChange}
-                  renderTrigger={(v) => (
-                    <>
-                      <span className="ldr-select-swatch" style={{ background: v.color }} />
-                      <span>{v.label}</span>
-                    </>
-                  )}
-                />
-              </label>
-              <label>
-                <span>Content type</span>
-                <CustomSelect
-                  value={contentType || "Article"}
-                  options={CONTENT_TYPES}
-                  onChange={handleContentTypeChange}
-                  renderTrigger={(v) => <span>{v}</span>}
-                />
-              </label>
-            </div>
-          </section>
+          </details>
 
-          {/* Details */}
-          <section className="ldr-section last">
-            <div className="ldr-section-h">
-              <div className="ldr-section-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Details
-              </div>
-            </div>
-            <dl className="ldr-meta">
-              <div><dt>Saved</dt><dd>{formatDate(data.saved_at)}</dd></div>
-              {data.done_at && <div><dt>Archived</dt><dd>{formatDate(data.done_at)}</dd></div>}
-              <div><dt>AI status</dt>
-                <dd className={aiStatusLabel.cls}>
-                  {aiStatusLabel.text}
-                  {(data.ai_status === "failed") && (
-                    <button onClick={() => onRetryAI(data.id)} style={{ marginLeft: 8, fontSize: 10.5, padding: "1px 7px", border: "1px solid var(--line)", borderRadius: 5, background: "var(--surface-2)", color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}>↺ Retry</button>
-                  )}
-                </dd>
-              </div>
-              <div><dt>Fetch</dt><dd className={data.fetch_status === "ok" ? "good" : "bad"}>{data.fetch_status}</dd></div>
-              <div><dt>Source</dt><dd className="mono">{data.canonical_url}</dd></div>
-            </dl>
-          </section>
-
+          <div style={{ height: 4 }} />
         </div>
 
         {/* ── Footer ── */}
         <footer className="ldr-foot">
           {!deleteConfirm ? (
             <>
-              <button
-                className="ldr-primary"
-                onClick={handleToggleStatus}
-                disabled={isArchive && data.status === "done" && false}
-              >
-                {(!isArchive) && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
+              <button className="ldr-primary" onClick={handleToggleStatus}>
+                {!isArchive && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
                 {isArchive ? "↩ Restore" : "Mark done"}
               </button>
-              <button
-                className="ldr-secondary danger"
-                title="Delete link"
-                onClick={() => setDeleteConfirm(true)}
-              >
+              <button className="ldr-secondary danger" title="Delete link" onClick={() => setDeleteConfirm(true)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
                 </svg>
@@ -572,8 +550,11 @@ export default function LinkDetailDrawer({ link, onClose, onUpdate, onDelete, on
           ) : (
             <>
               <span style={{ flex: 1, fontSize: 13, color: "var(--muted)", letterSpacing: "-0.005em" }}>Delete permanently?</span>
-              <button onClick={() => setDeleteConfirm(false)} className="ldr-secondary" style={{ width: "auto", padding: "0 16px", fontSize: 13 }}>Cancel</button>
-              <button onClick={handleDelete} className="ldr-secondary danger" style={{ width: "auto", padding: "0 16px", fontSize: 13, fontWeight: 600, color: "var(--read)", background: "var(--read-tint)", borderColor: "color-mix(in oklab, var(--read) 25%, var(--line))" }}>Delete</button>
+              {/* Widths come from a class, not inline styles: an inline
+                  background beats `.ldr-secondary:hover`, which is why the old
+                  confirm button had no hover at all. */}
+              <button onClick={() => setDeleteConfirm(false)} className="ldr-secondary wide">Cancel</button>
+              <button onClick={handleDelete} className="ldr-secondary wide danger confirm">Delete</button>
             </>
           )}
         </footer>

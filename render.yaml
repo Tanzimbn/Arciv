@@ -64,8 +64,6 @@ services:
         sync: false
       - key: SHARED_GEMINI_KEY       # optional shared AI key (else users supply their own)
         sync: false
-      - key: TELEGRAM_ENABLED
-        value: "false"
       # Offload embeddings to the arciv-embed service below so this container
       # (API + worker) never loads the ~400MB ONNX model → stays under 512Mi.
       # arciv-embed pins PORT=8001, so this internal URL is deterministic.

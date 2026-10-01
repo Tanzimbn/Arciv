@@ -18,9 +18,7 @@ class SettingsResponse(BaseModel):
     # None = the provider's own default model (see AIProvider.DEFAULT_MODEL).
     ai_model: str | None
     ai_api_key_masked: str | None
-    feed_notify_telegram: bool
     feed_notify_inapp: bool
-    telegram_enabled: bool
     shared_ai_available: bool
 
     model_config = {"from_attributes": True}
@@ -38,7 +36,6 @@ class SettingsUpdate(BaseModel):
     # AIModelsRequest.api_key — no provider key comes near that, and an
     # unbounded column is a free write amplifier.
     ai_api_key: str | None = Field(default=None, max_length=500)
-    feed_notify_telegram: bool | None = None
     feed_notify_inapp: bool | None = None
 
     _no_ctrl = field_validator("ai_api_key")(_reject_control_chars)

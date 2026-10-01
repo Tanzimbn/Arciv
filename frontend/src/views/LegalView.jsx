@@ -88,7 +88,7 @@ export default function LegalView({ type = "terms" }) {
         </div>
 
         {/* Title */}
-        <h1 style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: 44, lineHeight: 1.05, letterSpacing: "-0.015em", margin: "0 0 12px" }}>
+        <h1 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: 44, lineHeight: 1.05, letterSpacing: "-0.015em", margin: "0 0 12px" }}>
           {doc.title}
         </h1>
 
@@ -109,7 +109,7 @@ export default function LegalView({ type = "terms" }) {
           </section>
         ))}
 
-        <p style={{ fontSize: 12, color: "var(--muted-2)", fontFamily: "monospace", marginTop: 40 }}>
+        <p style={{ fontSize: 12, color: "var(--muted-2)", fontFamily: "var(--font-mono)", marginTop: 40 }}>
           arciv © 2026
         </p>
       </div>

@@ -84,7 +84,7 @@ function SourceRow({ feed, onTogglePause, onCheckNow, onDelete, isMobile }) {
     }}>
       {feed.favicon_url
         ? <img src={feed.favicon_url} alt="" style={{ width: isMobile ? 20 : 24, height: isMobile ? 20 : 24, objectFit: "contain", borderRadius: 4 }} onError={e => { e.target.style.display = "none"; e.target.parentNode.style.background = color; e.target.parentNode.textContent = letter; }} />
-        : <span style={{ color: "#fff", fontWeight: 700, fontSize: isMobile ? 13 : 15, fontFamily: "monospace" }}>{letter}</span>}
+        : <span style={{ color: "#fff", fontWeight: 700, fontSize: isMobile ? 13 : 15, fontFamily: "var(--font-mono)" }}>{letter}</span>}
     </div>
   );
 
@@ -110,7 +110,7 @@ function SourceRow({ feed, onTogglePause, onCheckNow, onDelete, isMobile }) {
             <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {feed.title || domain}
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
               {domain}
             </div>
           </div>
@@ -166,7 +166,7 @@ function SourceRow({ feed, onTogglePause, onCheckNow, onDelete, isMobile }) {
             </span>
           )}
         </div>
-        <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {domain}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
@@ -227,7 +227,7 @@ function Pill({ active, onClick, children }) {
 function Cnt({ active, n }) {
   return (
     <span style={{
-      fontFamily: "monospace", fontSize: 10.5, fontWeight: 500,
+      fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 500,
       padding: "1px 6px", borderRadius: 99,
       background: active ? "color-mix(in oklab, var(--bg) 18%, transparent)" : "rgba(31,28,21,.06)",
       color: active ? "var(--bg)" : "var(--muted)",
@@ -251,7 +251,7 @@ function DeleteModal({ onConfirm, onCancel }) {
             Cancel
           </button>
           <button onClick={onConfirm}
-            style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: "#fff", background: "var(--bad)", border: 0, borderRadius: 10, cursor: "pointer" }}>
+            style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700, color: "var(--on-color)", background: "var(--bad)", border: 0, borderRadius: 10, cursor: "pointer" }}>
             Remove
           </button>
         </div>
@@ -261,7 +261,7 @@ function DeleteModal({ onConfirm, onCancel }) {
 }
 
 /* ── Main view ───────────────────────────────────────────── */
-export default function FeedsView({ onBack }) {
+export default function FeedsView({ onNavigate, onLogout }) {
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
@@ -363,7 +363,7 @@ export default function FeedsView({ onBack }) {
   const { isMobile } = useBreakpoint();
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", fontFamily: "var(--font-sans)" }}>
       {/* CSS for ping animation */}
       <style>{`
         @keyframes arciv-ping-slow {
@@ -373,13 +373,13 @@ export default function FeedsView({ onBack }) {
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
-      <SubpageNav onBack={onBack} />
+      <SubpageNav active="feeds" onNavigate={onNavigate} onLogout={onLogout} />
 
       {/* Page */}
       <main className="arciv-page-pad" style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "20px 16px 80px" : "32px 28px 80px" }}>
         {/* Page heading */}
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
+          <h1 style={{ fontFamily: "var(--font-serif)", fontWeight: 400, fontSize: isMobile ? 32 : 44, lineHeight: 1.02, letterSpacing: "-0.01em", margin: 0, color: "var(--ink)" }}>
             Feed Tracker
           </h1>
           <div style={{ marginTop: 4, fontSize: 13.5, color: "var(--muted)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -417,7 +417,7 @@ export default function FeedsView({ onBack }) {
                 disabled={discovering}
                 style={{ flex: 1, border: 0, outline: 0, background: "transparent", font: "inherit", fontSize: 14, color: "var(--ink)", padding: 0 }}
               />
-              <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", padding: "3px 7px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--line)", flexShrink: 0 }}>⌘ V</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted)", padding: "3px 7px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--line)", flexShrink: 0 }}>⌘ V</span>
             </div>
             <button type="submit" disabled={!url.trim() || discovering}
               style={{
@@ -455,7 +455,7 @@ export default function FeedsView({ onBack }) {
                   display: "inline-flex", alignItems: "center", gap: 6,
                   padding: "4px 9px 4px 8px", borderRadius: 99,
                   background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-2)",
-                  fontFamily: "monospace", fontSize: 11, cursor: "pointer",
+                  fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer",
                   transition: "background .12s, border-color .12s, color .12s",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = "var(--accent-tint)"; e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}

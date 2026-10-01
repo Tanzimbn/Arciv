@@ -25,16 +25,12 @@ class User(Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    telegram_link_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    telegram_link_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ai_provider: Mapped[str] = mapped_column(String(50), default="gemini")
     # NULL = use the provider's DEFAULT_MODEL. Stored per user because
     # providers retire models, and that must be fixable from Settings
     # rather than by a redeploy.
     ai_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_api_key_enc: Mapped[str | None] = mapped_column(nullable=True)
-    feed_notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
     feed_notify_inapp: Mapped[bool] = mapped_column(Boolean, default=True)
     username: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     # Running approx byte total of this user's persisted content (see

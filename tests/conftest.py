@@ -70,7 +70,6 @@ os.environ.update(
         "EMBEDDINGS_ENABLED": "false",
         "EMBED_SERVICE_URL": "",
         "EMAIL_ENABLED": "false",
-        "TELEGRAM_ENABLED": "false",
         "SHARED_GEMINI_KEY": "",
         "ADMIN_EMAILS": "",
         "APP_BASE_URL": "http://test.local",
