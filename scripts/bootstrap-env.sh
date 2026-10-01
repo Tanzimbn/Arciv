@@ -33,8 +33,11 @@ if [ -f .env ] && [ "$FORCE" -eq 0 ]; then
     exit 0
 fi
 
-CARRIED_SECRET=""
-CARRIED_ENCRYPTION=""
+# Empty initialisers, not secrets. gitleaks' generic-api-key rule matches on the
+# variable NAMES here, so both are marked allowed — the values they later hold
+# come from the user's own .env and are never printed or committed.
+CARRIED_SECRET=""      # gitleaks:allow
+CARRIED_ENCRYPTION=""  # gitleaks:allow
 
 # Read a KEY=value out of the old .env, ignoring the shipped placeholder.
 previous_value() {
