@@ -115,6 +115,12 @@ runs reuse the Docker cache and start in seconds.
 
 Watch it with `docker compose logs -f` (`make logs`).
 
+Every service binds to **loopback**, so the stack answers on this machine only.
+To open the app to a phone on the same wifi — to check the mobile layout — run
+`API_BIND=0.0.0.0 docker compose up -d`. It is plain HTTP, so your password and
+session token cross the network unencrypted: do that only on a network you
+trust, or tunnel instead (`ssh -R`, Tailscale, `adb reverse`).
+
 > **Checkpoint:** `curl localhost:8000/health` (`make health`) returns JSON with
 > `"database": "ok"` and `"redis": "ok"`. `docker compose ps` shows six services
 > up.
