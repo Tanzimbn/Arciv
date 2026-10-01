@@ -7,8 +7,8 @@
 # Run `make` with no arguments for the list.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup up down restart logs ps health venv test test-unit \
-        test-services test-services-down lint frontend clean-test
+.PHONY: help setup up down restart logs ps health venv require-venv test \
+        test-unit test-services test-services-down lint frontend clean-test
 
 # Tests run on the host (not in a container) and need the dev dependencies.
 # 3.12 matches the Dockerfile and CI — asyncpg and pydantic-core have no 3.13
@@ -71,19 +71,22 @@ test-services:  ## Start the throwaway Postgres + Redis used by integration test
 test-services-down:  ## Stop and delete the throwaway test services
 	docker compose -f docker-compose.test.yml down -v
 
-test: test-services  ## Run the full suite (unit + integration)
+# The venv check is its own prerequisite, listed BEFORE test-services: as a
+# recipe line it ran after the containers were already up, so a missing venv
+# left the arciv-test stack running with nothing to clean it up.
+require-venv:
 	@test -x $(PY) || { echo "No $(VENV) — run 'make venv' first."; exit 1; }
+
+test: require-venv test-services  ## Run the full suite (unit + integration)
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) \
 	TEST_REDIS_URL=$(TEST_REDIS_URL) \
 	ARCIV_REQUIRE_SERVICES=1 \
 	$(PY) -m pytest
 
-test-unit:  ## Run only the unit layer (no services needed)
-	@test -x $(PY) || { echo "No $(VENV) — run 'make venv' first."; exit 1; }
+test-unit: require-venv  ## Run only the unit layer (no services needed)
 	$(PY) -m pytest -m "not integration"
 
-lint:  ## Run ruff over the Python source
-	@test -x $(PY) || { echo "No $(VENV) — run 'make venv' first."; exit 1; }
+lint: require-venv  ## Run ruff over the Python source
 	$(PY) -m ruff check .
 
 # --- Frontend -------------------------------------------------------------- #
