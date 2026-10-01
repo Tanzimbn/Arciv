@@ -40,20 +40,50 @@ Arciv is a personal read-it-later that thinks. Save any URL — the system pulls
 
 ## Features
 
-- **Smart link saving** — paste a URL, get metadata extraction, canonicalization, and dedup at the DB level.
-- **AI-powered classification** — links are categorized as `article`, `video`, `tool`, `research-paper`, etc. and routed to the right queue. Each one gets a 2–3 sentence summary and a handful of tags.
-- **Bring your own provider** — works out of the box with **Gemini**, **Groq**, **Anthropic Claude**, **OpenAI**, or **Ollama Cloud**. Keys are encrypted at rest with AES-256.
-- **Graceful AI fallback** — if no provider is configured (or the provider rate-limits you), links fall back to URL-pattern heuristics. The system never blocks on AI.
-- **Feed tracking, the polite way** — subscribe to RSS/Atom feeds and receive a single grouped notification per feed when new posts appear. **No auto-ingest** — you decide what to save. RSS auto-discovery, ETag/Last-Modified conditional polling, failure handling (degraded at 7 consecutive failures, dead at 30).
-- **Semantic search** — find a link by describing it ("that article about Go concurrency"), not by remembering its title. Every link is embedded at save time; search ranks by cosine similarity.
-- **Topics** — tags grouped into a topic rail above the list, scoped to the queue tab you're on, so a chip's count is exactly what clicking it shows. Derived on read; nothing to reindex.
-- **Related links** — a Similar section in the link drawer, plus notes and on-demand AI insights per link.
-- **In-app notifications** — bell icon with unread counter, accessible across the app.
-- **Production-grade auth** — email verification (block-until-verified), short-lived access JWT + rotating refresh tokens, password reset, password-strength rules, and per-endpoint rate limiting. Verification/reset email via Gmail API or SMTP.
-- **Admin monitoring panel** — an `/admin` dashboard (gated by `ADMIN_EMAILS`) showing daily traffic, unique visitors, and signups, plus user management. Metrics use lightweight Redis aggregate counters (no per-request rows, IPs hashed).
-- **Own your data** — self-serve JSON export (`GET /api/account/export`) and account deletion, both from Settings.
-- **Single-command self-hosting** — `docker compose up`. Postgres, Redis, API, worker, and the embedding service, all in one stack. Frontend served by FastAPI.
-- **Cron-driven feed polling** — configurable schedule (default daily at 08:00 UTC).
+### Saving
+
+- **Paste a URL and you're done.** Arciv fetches the title, description and
+  favicon, cleans the tracking junk off the link, and quietly notices if you've
+  saved it before. No form, no tagging, no filing.
+- **It sorts itself.** Each link gets read, summarised in two or three
+  sentences, tagged, and dropped into the queue it belongs in — **Watch Later**
+  for video, **Read Later** for articles and papers, **Try Later** for tools.
+  You come back to a sorted library instead of a pile.
+- **Notes and deeper reads.** Add your own notes to any link, or ask for
+  on-demand insights when a summary isn't enough.
+
+### Finding things again
+
+- **Search by what you remember, not what it was called.** "that article about
+  Go concurrency" finds the right link even when none of those words appear in
+  its title.
+- **Topics.** Your tags become chips above the list, counted for the tab you're
+  on — a chip that says 7 opens exactly 7 links.
+- **Similar links.** Open a link and see what else in your library is about the
+  same thing.
+
+### Following sources
+
+- **Feeds that alert you instead of flooding you.** Subscribe to a blog by
+  pasting its homepage — Arciv finds the feed. When new posts appear you get
+  one notification listing them. Nothing is saved to your queues unless you say
+  so, because a reading list you didn't choose isn't a reading list.
+
+### Staying yours
+
+- **Your AI, your key, or no key at all.** Choose **Gemini**, **Groq**,
+  **Claude**, **OpenAI** or **Ollama Cloud** — you hold the account and pay for
+  your own usage. With no key configured, Arciv still sorts links by URL
+  patterns and everything else works normally; AI is an upgrade, never a
+  dependency.
+- **It runs on your own machine.** One command brings up the whole stack.
+  Nothing leaves your box except the AI calls you asked for.
+- **Leaving is easy.** Export everything as JSON or delete your account
+  outright, both from Settings.
+
+Auth, encryption, tenancy, abuse limits, admin metrics and deployment are
+covered in [Security](#security), [Monitoring](#monitoring) and
+[Deployment](#deployment).
 
 ## Quick Start
 
