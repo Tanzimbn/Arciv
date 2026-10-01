@@ -38,8 +38,15 @@ def normalise_tag(tag: str) -> str:
 
     ``"  React Native "`` and ``"react_native"`` both become ``"react-native"``.
     Returns ``""`` for a tag that is only separators — callers drop those.
+
+    There is deliberately no leading strip. Edge whitespace becomes a dash like
+    any other separator and the final ``strip("-")`` removes it, so a strip
+    would be redundant — and ``str.strip()`` is unicode-aware where Postgres'
+    ``btrim`` trims U+0020 only, which made ``"\xa0Rust\xa0"`` group under
+    ``rust`` while ``?tag=rust`` matched nothing. Exactly the drift this
+    module's twin pair exists to prevent.
     """
-    key = _SEPARATORS.sub("-", tag.strip().lower())
+    key = _SEPARATORS.sub("-", tag.lower())
     key = _REPEATED_DASHES.sub("-", key)
     return key.strip("-")
 
@@ -50,7 +57,9 @@ def tag_key_sql(column):
     Used both to ``GROUP BY`` in the topic list and to resolve ``?tag=`` in the
     link list, so the two cannot drift apart.
     """
-    lowered = func.lower(func.btrim(column))
+    # No btrim here either — see ``normalise_tag``. The two pipelines are now
+    # the same three steps in the same order, which is the point of the pair.
+    lowered = func.lower(column)
     hyphenated = func.regexp_replace(lowered, _SEPARATORS_SQL, "-", "g")
     collapsed = func.regexp_replace(hyphenated, _REPEATED_DASHES_SQL, "-", "g")
     return func.btrim(collapsed, "-")

@@ -24,7 +24,10 @@ services:
       # maintenance database), and refuses any name not ending in _test.
       POSTGRES_DB: postgres
     ports:
-      - "55432:5432"
+      # Loopback only. The password is `arciv` and Redis below has none at all,
+      # so publishing on every interface hands the test database to anyone on
+      # the network. `make test` connects from the host, which still works.
+      - "127.0.0.1:55432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U arciv"]
       interval: 2s
@@ -35,7 +38,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "56379:6379"
+      - "127.0.0.1:56379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

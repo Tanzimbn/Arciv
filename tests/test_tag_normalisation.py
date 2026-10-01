@@ -25,6 +25,17 @@ def test_surrounding_whitespace_is_stripped():
     assert normalise_tag("\tvector\tsearch\n") == "vector-search"
 
 
+def test_unicode_spaces_are_not_treated_as_whitespace():
+    # The separator class is ASCII by design, and the function does no
+    # ``str.strip()`` — that call was unicode-aware where Postgres' ``btrim``
+    # trims U+0020 only, so a tag edged with NBSP grouped under "rust" while
+    # ?tag=rust matched nothing. Keeping the exotic space in the key is the
+    # cheap half of the bargain; agreeing with SQL is the valuable half.
+    assert normalise_tag("\xa0Rust\xa0") == "\xa0rust\xa0"
+    assert normalise_tag("\u2003Rust") == "\u2003rust"
+    assert normalise_tag("a\xa0b") == "a\xa0b"
+
+
 def test_runs_of_separators_collapse_to_one_hyphen():
     assert normalise_tag("machine   learning") == "machine-learning"
     assert normalise_tag("machine _ learning") == "machine-learning"

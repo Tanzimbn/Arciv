@@ -1,0 +1,9 @@
+# Fingerprints gitleaks must not re-report. One line per finding, as
+# <commit>:<path>:<rule>:<line>. CI scans the FULL history (secret-scan.yml uses
+# fetch-depth: 0), so a false positive in an existing commit cannot be fixed by
+# changing the file — the old commit still contains it. Only add a line here
+# after confirming by eye that the match holds no real secret.
+
+# `CARRIED_SECRET=""` / `CARRIED_ENCRYPTION=""` — empty shell initialisers in the
+# .env bootstrap script. The rule matched the variable names, not a value.
+2f06c82407b8d833754180b2fe603b8f997b8cd6:scripts/bootstrap-env.sh:generic-api-key:36

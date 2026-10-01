@@ -109,6 +109,11 @@ export default function LinksView({ onLogout, onNavigate }) {
   const [activeTags, setActiveTags] = useState([]);
   const [tagLogic, setTagLogic] = useState("any");
   const [tagResults, setTagResults] = useState(null);
+  /* Distinguishes "the query has not come back" from "the query returned
+     nothing". Without it the grid saw `?? []` for the whole round trip and
+     showed "Nothing matches this combination" before any result arrived — a
+     matching selection reported itself as a miss first. */
+  const [tagLoading, setTagLoading] = useState(false);
   const [topics, setTopics] = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(true);
   const [showAllTopics, setShowAllTopics] = useState(false);
@@ -264,8 +269,9 @@ export default function LinksView({ onLogout, onNavigate }) {
   // Topic browsing (no search query) is a server query: the tag must resolve
   // over the whole library, not over whatever subset is loaded client-side.
   useEffect(() => {
-    if (!activeTags.length || searchQuery.trim()) { setTagResults(null); return; }
+    if (!activeTags.length || searchQuery.trim()) { setTagResults(null); setTagLoading(false); return; }
     let cancelled = false;
+    setTagLoading(true);
     api
       .getLinks({
         tag: activeTags,
@@ -273,8 +279,8 @@ export default function LinksView({ onLogout, onNavigate }) {
         queue: activeQueue ?? undefined,
         limit: 500,
       })
-      .then(r => { if (!cancelled) setTagResults(r); })
-      .catch(() => { if (!cancelled) setTagResults([]); });
+      .then(r => { if (!cancelled) { setTagResults(r); setTagLoading(false); } })
+      .catch(() => { if (!cancelled) { setTagResults([]); setTagLoading(false); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagKey, tagLogic, activeQueue, searchQuery]);
@@ -793,7 +799,11 @@ export default function LinksView({ onLogout, onNavigate }) {
         ) : (
           <div className="arciv-cards-grid arciv-grid" style={{ display: "grid", gridTemplateColumns: effectiveLayout === "list" ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: effectiveLayout === "list" ? 8 : 14 }}>
             {pendingUrl && <ClassifyingCard url={pendingUrl} onComplete={handleClassifyComplete} />}
-            {visible.length === 0 && !pendingUrl ? (
+            {visible.length === 0 && !pendingUrl && tagLoading ? (
+              <div style={{ gridColumn: "1/-1", padding: 40, textAlign: "center", fontSize: 13, color: "var(--muted)" }}>
+                Finding links…
+              </div>
+            ) : visible.length === 0 && !pendingUrl ? (
               /* A topic combination that matches nothing needs the way out named
                  — an empty grid under a filter bar reads as "you have nothing
                  saved", which is rarely what happened. */

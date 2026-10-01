@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normaliseTag } from "../api/tags.js";
 
 const TagIcon = ({ size = 13 }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -62,8 +63,16 @@ export function TopicsFilter({
 }) {
   const [toggleHov, setToggleHov] = useState(false);
   const n = selected.length;
+  /* Chips show `label` — the dominant original spelling, "Machine Learning" —
+     while `key` is the normalised "machine-learning". Searching only the key
+     meant typing what is on screen matched nothing. Both are checked, with the
+     query normalised the same way a key is so "Machine Learning" reaches it. */
   const q = query.trim().toLowerCase();
-  const matching = q ? topics.filter(t => t.key.includes(q)) : topics;
+  const qKey = normaliseTag(query);
+  const matching = q
+    ? topics.filter(t =>
+        (qKey && t.key.includes(qKey)) || t.label?.toLowerCase().includes(q))
+    : topics;
   const hasMore = matching.length > VISIBLE;
   const shown = showAll ? matching : matching.slice(0, VISIBLE);
 

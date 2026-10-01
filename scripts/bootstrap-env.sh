@@ -13,6 +13,12 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# .env holds SECRET_KEY and ENCRYPTION_KEY. Under the usual umask 022 a plain
+# `> .env` lands at 0644 — readable by every account on the machine — so the
+# whole script writes owner-only and the files are chmod'd explicitly as well,
+# because `--force` can rewrite a file that already has a permissive mode.
+umask 077
+
 FORCE=0
 [ "$1" = "--force" ] && FORCE=1
 
@@ -27,10 +33,37 @@ if [ -f .env ] && [ "$FORCE" -eq 0 ]; then
     exit 0
 fi
 
+# Empty initialisers, not secrets. gitleaks' generic-api-key rule matches on the
+# variable NAMES here, so both are marked allowed — the values they later hold
+# come from the user's own .env and are never printed or committed.
+CARRIED_SECRET=""      # gitleaks:allow
+CARRIED_ENCRYPTION=""  # gitleaks:allow
+
+# Read a KEY=value out of the old .env, ignoring the shipped placeholder.
+previous_value() {
+    [ -f .env ] || return 0
+    value=$(sed -n "s/^$1=//p" .env | head -n 1)
+    case "$value" in
+        ""|change_me*) return 0 ;;
+        *) printf '%s' "$value" ;;
+    esac
+}
+
 if [ -f .env ]; then
     BACKUP=".env.backup.$(date +%Y%m%d%H%M%S)"
     cp .env "$BACKUP"
+    chmod 600 "$BACKUP"
     echo "Backed up existing .env to $BACKUP"
+
+    # Both secrets are carried over rather than regenerated. `docker compose
+    # down` keeps the postgres_data volume, so a new ENCRYPTION_KEY would leave
+    # every stored provider key undecryptable — the KEK that wrapped them would
+    # be gone and nothing would be in ENCRYPTION_KEYS_RETIRED. Rotating is a
+    # deliberate, documented procedure (see .env.example), not a side effect of
+    # regenerating a config file. A new SECRET_KEY is milder but still signs
+    # every active session out.
+    CARRIED_SECRET=$(previous_value SECRET_KEY)
+    CARRIED_ENCRYPTION=$(previous_value ENCRYPTION_KEY)
 fi
 
 # 32 random bytes as hex. openssl is near-universal; Python is the fallback for
@@ -46,8 +79,8 @@ gen_secret() {
     fi
 }
 
-SECRET_KEY=$(gen_secret)
-ENCRYPTION_KEY=$(gen_secret)
+SECRET_KEY=${CARRIED_SECRET:-$(gen_secret)}
+ENCRYPTION_KEY=${CARRIED_ENCRYPTION:-$(gen_secret)}
 
 # Written with awk rather than `sed -i`: the in-place flag differs between GNU
 # and BSD/macOS sed, and the replacement values are hex so there is nothing to
@@ -58,7 +91,16 @@ awk -v sk="$SECRET_KEY" -v ek="$ENCRYPTION_KEY" '
     { print }
 ' .env.example > .env
 
-echo "Wrote .env with freshly generated SECRET_KEY and ENCRYPTION_KEY."
+chmod 600 .env
+
+if [ -n "$CARRIED_ENCRYPTION" ] || [ -n "$CARRIED_SECRET" ]; then
+    echo "Wrote .env (mode 600), keeping the existing secrets:"
+    [ -n "$CARRIED_SECRET" ]     && echo "  SECRET_KEY     — a new one would sign out every active session"
+    [ -n "$CARRIED_ENCRYPTION" ] && echo "  ENCRYPTION_KEY — a new one would orphan every stored provider key"
+    echo "  To rotate either on purpose, follow the runbook in .env.example."
+else
+    echo "Wrote .env (mode 600) with freshly generated SECRET_KEY and ENCRYPTION_KEY."
+fi
 
 # Port collisions are the most common first-run failure, and compose reports
 # them as an opaque bind error per service. Name them up front instead.

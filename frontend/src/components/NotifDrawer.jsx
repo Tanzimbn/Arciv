@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, errMessage } from "../api/client.js";
 import { useScrollLock } from "../hooks/useScrollLock.js";
@@ -161,7 +161,16 @@ export default function NotifDrawer({ notif, onClose }) {
     return () => { cancelled = true; };
   }, [open, sourceUrl]);
 
+  /* `unsaved` keeps a URL in the list while it is still saving, so a second
+     "Save all" click reaches savePost for a request already in flight. The
+     per-post button disables itself, but the bulk one cannot — it is one button
+     for many URLs. A ref, not state: the guard has to be visible to the next
+     call in the same tick, before React has re-rendered. */
+  const inFlight = useRef(new Set());
+
   const savePost = useCallback(async (url) => {
+    if (inFlight.current.has(url)) return false;
+    inFlight.current.add(url);
     setSaveState(s => ({ ...s, [url]: "saving" }));
     try {
       await api.createLink(url);
@@ -179,6 +188,8 @@ export default function NotifDrawer({ notif, onClose }) {
       setSaveState(s => ({ ...s, [url]: "error" }));
       setSaveError(errMessage(err, "Could not save that link."));
       return false;
+    } finally {
+      inFlight.current.delete(url);
     }
   }, []);
 
