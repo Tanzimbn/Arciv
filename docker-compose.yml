@@ -85,10 +85,17 @@ services:
     environment:
       EMBED_SERVICE_URL: http://embed:8001
     ports:
-      # Deliberately NOT loopback-bound, unlike every other service here: this
-      # is the one you open from a phone on the same wifi to check the mobile
-      # layout. It is the app's own authenticated surface, not a bare datastore.
-      - "8000:8000"
+      # Loopback by default, like everything else here. uvicorn serves plain
+      # HTTP, so a login password and the refresh token it returns cross the
+      # network in the clear — on shared wifi that is a readable credential,
+      # not a theoretical one.
+      #
+      # To check the mobile layout on a real phone, opt in for that session:
+      #   API_BIND=0.0.0.0 docker compose up -d
+      # Do it on a network you trust, and prefer a throwaway account. For an
+      # untrusted network, tunnel instead (ssh -R, tailscale, adb reverse) so
+      # the phone still talks to a loopback address.
+      - "${API_BIND:-127.0.0.1}:8000:8000"
     volumes: *app-src
     depends_on:
       db:
