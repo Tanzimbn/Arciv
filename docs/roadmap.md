@@ -32,9 +32,9 @@ The core bet: turn a growing pile of saved links into something queryable and se
 - ~~Semantic search~~ — "that article about Go concurrency" without the title
 - ~~Similar links~~ — related saves in the detail drawer
 - ~~Topic explorer~~ — tags grouped on read into a queue-scoped topic rail
-- **Resurface digest (next focus)** — AI-ranked weekly nudge of forgotten-but-relevant links, delivered as an in-app notification
-- **Near-duplicate detection at save time** — the embeddings are already there; nothing consumes them for this yet
-- **IVFFlat index on embeddings** — search is a per-user linear scan today, fine at MVP scale
+- **Resurface digest (next focus)** — AI-ranked weekly nudge of forgotten-but-relevant links, delivered as an in-app notification. Starts from nothing: `worker/daily_digest.py` was deleted with the Telegram integration, since sending that digest was all it did. Needs a new worker module, a cron registration in `WorkerSettings`, and a ranking query over `links.embedding` + `saved_at`.
+- **Near-duplicate detection at save time** — the embeddings and the vector index are both already live; nothing consumes them for this yet. The cheapest of these three to start.
+- ~~IVFFlat index on embeddings~~ — superseded: migration `0012_link_embedding` already creates an **HNSW** index (`idx_links_embedding_hnsw`, `m=16`, `ef_construction=64`, `vector_cosine_ops`). HNSW was chosen over IVFFlat because it needs no training step, so it is correct on an empty or partially embedded table. What is still unmeasured is whether the planner picks it once a `user_id` predicate narrows the set — measure before adding any further index.
 
 ## v0.2
 
